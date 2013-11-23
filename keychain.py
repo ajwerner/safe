@@ -67,8 +67,8 @@ class KeyChain:
 	def read_keychain(self, key_type, dev_id=0):
 		'''
 		This method is used to read values from the keychain.
-		1) Return the tuple master public/private(encrypted) keys.
-		2) Return the master key of device with the id dev_id.
+		1) Return the tuple master <public,private(encrypted)> keys.
+		2) Return the public key of the device with the id dev_id.
 		'''
 		kc_mm = mmap.mmap(self.kc_file.fileno(), 0, mmap.MAP_PRIVATE, 
 					mmap.PROT_READ | mmap.PROT_WRITE)
@@ -137,6 +137,8 @@ class KeyChain:
 		We do not need padding as we always deal with a string that 
 		always will have a length of multiple of 16, 24, 32.
 		'''
+		
+		#TODO: Implement encryption correctly...
 		encrypted_key = None
 		cipher = AES.new(self.kc_key)
 		encrypted_key = cipher.encrypt(secret_key)
