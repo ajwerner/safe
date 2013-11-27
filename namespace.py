@@ -66,8 +66,6 @@ class Namespace:
                 self.dev_set.add(json.loads(dev_json, cls=DeviceDecoder))
         except ValueError as e:
             logging.warning("%s:%s",self.dev_list, str(e))
-            #Write the list container in JSON format
-            self.dev_list_obj = list()
 
         self.devl_fd.close()
         self.nsl_fd.close()
