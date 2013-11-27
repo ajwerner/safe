@@ -34,6 +34,7 @@ import json
 import logging
 from device import Device
 from device import DeviceEncoder
+from device import DeviceDecoder
 from device import DeviceError
 
 #Setup logging...
@@ -43,41 +44,53 @@ class Namespace:
     def __init__(self, dev_list, ns_list):
         self.dev_list = dev_list
         self.ns_list = ns_list
-        self.devl_fd = open(self.dev_list, "w+b")
-        self.nsl_fd = open(self.dev_list, "w+b")
+        try:
+            self.devl_fd = open(self.dev_list)
+        except IOError as e:
+            self.devl_fd = open(self.dev_list, "w+")
+
+        try:
+            self.nsl_fd = open(self.ns_list)
+        except IOError as e:
+            self.nsl_fd = open(self.ns_list, "w+")
+
         self.dev_list_obj = None
+        self.dev_set = set()
         self.ns_list_obj = None
-        #Parse the device list and decode
+        
+        #Parse the device list and pack them in a set
         try:
             self.dev_list_obj = json.load(self.devl_fd)
+            for dev_dict in self.dev_list_obj:
+                dev_json = json.dumps(dev_dict)
+                self.dev_set.add(json.loads(dev_json, cls=DeviceDecoder))
         except ValueError as e:
             logging.warning("%s:%s",self.dev_list, str(e))
             #Write the list container in JSON format
             self.dev_list_obj = list()
-        try:
-            self.ns_list_obj = json.load(self.nsl_fd)
-        except ValueError as e:
-            logging.warning("%s:%s",self.ns_list, str(e))
-            #Write the list container in JSON format
-            self.ns_list_obj = list()
-            #print json.dumps(ns_list, cls=NamespaceEncoder)
+
+        self.devl_fd.close()
+        self.nsl_fd.close()
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.devl_fd = open(self.dev_list, "w+")
         self.devl_fd.truncate(0)
-        json.dump(self.dev_list_obj, self.devl_fd, cls=DeviceEncoder)
+        json.dump(list(self.dev_set), self.devl_fd, cls=DeviceEncoder)
         self.devl_fd.close()
-        self.nsl_fd.close()
 
     def add_device(self, device):
-        self.dev_list_obj.append(device)
+        self.dev_set.add(device)
+
+    def remove_device(self, device):
+        self.dev_set.remove(device)
 
 '''Test Namespace
 with Namespace("/tmp/dev_list", "/tmp/ns_list") as ns:
     dev = Device(10, "iPhone", None)
     ns.add_device(dev)
-    dev = Device(1, "laptop", None)
-    ns.add_device(dev)
+    dev = Device(11, "iPhone", None)
+    ns.remove_device(dev)
 '''

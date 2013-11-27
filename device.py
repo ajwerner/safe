@@ -25,6 +25,19 @@ class DeviceEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+        
+class DeviceDecoder(json.JSONDecoder):
+    def decode(self, json_str):
+        try:
+            dec_str = json.loads(json_str)
+        except ValueError as e:
+            raise e
+        if dec_str is not None:
+            return Device(dec_str['dev_id'], dec_str['dev_name'], 
+                        dec_str['app_obj'], dec_str['int_ts'])
+        else:
+            return None
+
 class Device():
     def __init__(self, dev_id, dev_name, app_obj, ts=-1):
         if dev_id < 0 or dev_id > 65535:
@@ -40,11 +53,16 @@ class Device():
     def __str__(self):
         return self.dev_name+"#"+str(self.dev_id)+"@"+str(self.int_ts)
 
-    @staticmethod
-    def json_to_device(json_str):
-        dec_str = json.loads(json_str)
-        return Device(dec_str['dev_id'], dec_str['dev_name'], 
-                      dec_str['app_obj'], dec_str['int_ts'])
+    def __hash__(self):
+        return self.dev_id
+
+    def __cmp__(self, other):
+        if self.dev_id < other.dev_id:
+            return -1
+        elif self.dev_id == other.dev_id:
+                return 0
+        else:
+            return 1
 
 
 '''Test Device class
@@ -52,8 +70,8 @@ try:
     dev = Device(10, "iPhone", None)
     print dev
     json_dev = json.dumps(dev, cls=DeviceEncoder)
-    print json_dev
-    dev2 = Device.json_to_device(json_dev)
+    #print json_dev
+    dev2 = json.loads(json_dev, cls=DeviceDecoder)
     print dev2
 except DeviceError as e:
     print "Error"
