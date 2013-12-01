@@ -32,10 +32,16 @@ __version__     = "0.1"
 import os
 import json
 import logging
+
 from device import Device
 from device import DeviceEncoder
 from device import DeviceDecoder
 from device import DeviceError
+
+from peer_ns import PeerNS
+from peer_ns import PeerNSEncoder
+from peer_ns import PeerNSDecoder
+from peer_ns import PeerNSError
 
 #Setup logging...
 logging.basicConfig(format='%(levelname)s:%(message)s')
@@ -56,7 +62,9 @@ class Namespace:
 
         self.dev_list_obj = None
         self.dev_set = set()
+
         self.ns_list_obj = None
+        self.ns_set = set()
         
         #Parse the device list and pack them in a set
         try:
@@ -66,6 +74,16 @@ class Namespace:
                 self.dev_set.add(json.loads(dev_json, cls=DeviceDecoder))
         except ValueError as e:
             logging.warning("%s:%s",self.dev_list, str(e))
+
+        #Parse the namespace list and pack them in a set
+        try:
+            self.ns_list_obj = json.load(self.nsl_fd)
+            for ns_dict in self.ns_list_obj:
+                ns_json = json.dumps(ns_dict)
+                self.ns_set.add(json.loads(ns_json, cls=PeerNSDecoder))
+        except ValueError as e:
+            logging.warning("%s:%s", self.ns_list, str(e))
+
 
         self.devl_fd.close()
         self.nsl_fd.close()
@@ -79,16 +97,38 @@ class Namespace:
         json.dump(list(self.dev_set), self.devl_fd, cls=DeviceEncoder)
         self.devl_fd.close()
 
+        self.nsl_fd = open(self.ns_list, "w+")
+        self.nsl_fd.truncate(0)
+        json.dump(list(self.ns_set), self.nsl_fd, cls=PeerNSEncoder)
+        self.nsl_fd.close()
+
     def add_device(self, device):
         self.dev_set.add(device)
 
     def remove_device(self, device):
         self.dev_set.remove(device)
 
+    def add_peer_namespace(self, pns):
+        self.ns_set.add(pns)
+
+    def remove_peer_namespace(self, pns):
+        self.ns_set.remove(pns)
+
 '''Test Namespace
 with Namespace("/tmp/dev_list", "/tmp/ns_list") as ns:
-    dev = Device(10, "iPhone", None)
-    ns.add_device(dev)
-    dev = Device(11, "iPhone", None)
-    ns.remove_device(dev)
-'''
+    dev0 = Device(10, "iPhone", None)
+    dev1 = Device(11, "iPad", None)
+    dev2 = Device(12, "MacBook", None)
+    ns.add_device(dev0)
+    ns.add_device(dev1)
+    ns.add_device(dev2)
+    ns.remove_device(dev1)
+
+    pns0 = PeerNS(1000, "Bob", "AAAAAAAAAAAAAAAAAAA")
+    pns1 = PeerNS(1001, "Dac", "AAAAACCCCAAAAAAAAAA")
+    pns2 = PeerNS(1002, "Carla", "AAAAAAFFFFFFFFFFFF")
+    ns.add_peer_namespace(pns0)
+    ns.add_peer_namespace(pns1)
+    ns.add_peer_namespace(pns2)
+    ns.remove_peer_namespace(pns1)
+''' 
