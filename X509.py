@@ -72,12 +72,15 @@ class X509:
             self.cert.sign(signer_key, 'sha1')
 
     @classmethod
-    def load_certificate(cls, file_name):
-        kc = KeyChain("/tmp", file_name, "1234")
-        cert_pem = kc.read_keychain()[0]
+    def load_certificate(cls, keychain):
+        kc = KeyChain("/tmp", keychain, "1234")
+        rec = kc.read_keychain()
+        cert_pem = rec[0]
+        key_pem  = rec[1]
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
         subject = cert.get_subject()
-        return cls("", cert.get_pubkey(), "", subject.C, subject.ST, 
+        key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
+        return cls("", key, "", subject.C, subject.ST, 
                     subject.L, cert)
 
     def update_keychain(self, keychain):
@@ -88,9 +91,12 @@ class X509:
             raise X509Error("Certificate exists: "+keychain)
 
     def get_certificate(self):
-        return self.cert
+        return self.cert, self.pkey
+
+
 
 '''Test X509 class
+'''
 #Self sign the namespace keys
 def _self_sign_ns(namespace):
     k = crypto.PKey()
@@ -107,14 +113,16 @@ def _self_sign_ns(namespace):
 def _sign_device(dev_name, namespace):
     #Load certificate for the namespace from the keychain
     x509 = X509.load_certificate(namespace)
-    cert = x509.get_certificate()
+    cert_and_key = x509.get_certificate()
+    cert = cert_and_key[0]
+    key  = cert_and_key[1]
     #Generate a keypair for the device
     k = crypto.PKey()
     k.generate_key(crypto.TYPE_RSA, 1024)
     #Sign the device key using namespace cert
     try:
         x509_dev = X509(dev_name, k, namespace, "US", "NJ", "Princeton")
-        x509_dev.sign_certificate(cert, k)
+        x509_dev.sign_certificate(cert, key)
         x509_dev.update_keychain(dev_name+"."+namespace)
     except X509Error as e:
         print str(e)
@@ -123,4 +131,4 @@ def _sign_device(dev_name, namespace):
 _self_sign_ns("wathsala")
 #sign the device Dev0
 _sign_device("Dev0", "wathsala")
-'''
+

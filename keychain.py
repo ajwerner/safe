@@ -48,12 +48,10 @@ class KeyChain:
         '''
         Return the certficate and the private key
         '''
-        print self.keychain_path
         try:
             kc_mm = mmap.mmap(self.kc_file.fileno(), 0, mmap.MAP_PRIVATE, 
                     mmap.PROT_READ | mmap.PROT_WRITE)
         except (ValueError, TypeError) as e:
-            print e
             return None
         _offset = 0
         cert_len = struct.unpack('I', kc_mm[_offset:_offset+4])[0]
@@ -73,7 +71,6 @@ class KeyChain:
         rec = self.read_keychain()
         if rec is not None:
             return -KeyChain.ERROR_KEY_EXIST
-        print rec
         cert_len = len(certificate)
         key_len  = len(priv_key)
         _offset = 0
