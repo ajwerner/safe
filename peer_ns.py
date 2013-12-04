@@ -15,7 +15,7 @@ A peer namespace is a namespace owned by a different entity in the network. For 
 Peer namespaces are stored in the disk in following JSON format.
 
     {
-        "ns_id":        "A unique 256-bit ID"
+        "ns_id":        "A unique 128-bit ID"
         "ns_name":      "ALice"
         "ctime":        "10/11/2013"
         "pub_key":      "PEM encoded RSA public key"
