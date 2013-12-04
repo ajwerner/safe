@@ -96,7 +96,6 @@ class X509:
 
 
 '''Test X509 class
-'''
 #Self sign the namespace keys
 def _self_sign_ns(namespace):
     k = crypto.PKey()
@@ -131,4 +130,4 @@ def _sign_device(dev_name, namespace):
 _self_sign_ns("wathsala")
 #sign the device Dev0
 _sign_device("Dev0", "wathsala")
-
+'''
