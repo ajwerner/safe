@@ -50,15 +50,8 @@ class Namespace:
     def __init__(self, dev_list, ns_list):
         self.dev_list = dev_list
         self.ns_list = ns_list
-        try:
-            self.devl_fd = open(self.dev_list)
-        except IOError as e:
-            self.devl_fd = open(self.dev_list, "w+")
-
-        try:
-            self.nsl_fd = open(self.ns_list)
-        except IOError as e:
-            self.nsl_fd = open(self.ns_list, "w+")
+        self.devl_fd = open(self.dev_list, "a+")
+        self.nsl_fd = open(self.ns_list, "a+")
 
         self.dev_list_obj = None
         self.dev_set = set()
@@ -85,33 +78,39 @@ class Namespace:
             logging.warning("%s:%s", self.ns_list, str(e))
 
 
-        self.devl_fd.close()
-        self.nsl_fd.close()
-
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
-        self.devl_fd = open(self.dev_list, "w+")
-        self.devl_fd.truncate(0)
-        json.dump(list(self.dev_set), self.devl_fd, cls=DeviceEncoder)
+        self.sync_local_storage()
         self.devl_fd.close()
+        self.nsl_fd.close()
+    
+    def get_device_list(self):
+        return json.dumps(list(self.dev_set), cls=DeviceEncoder)
+    
+    def get_peer_ns_list(self):
+        return json.dumps(list(self.ns_set), cls=PeerNSEncoder)
 
-        self.nsl_fd = open(self.ns_list, "w+")
+    def sync_local_storage(self):
+        self.devl_fd.truncate(0)
+        dev_list_json = json.dumps(list(self.dev_set), cls=DeviceEncoder)
+        self.devl_fd.write(dev_list_json)
         self.nsl_fd.truncate(0)
         json.dump(list(self.ns_set), self.nsl_fd, cls=PeerNSEncoder)
-        self.nsl_fd.close()
 
-    def add_device(self, device):
+    def _add_device(self, device):
         self.dev_set.add(device)
 
-    def remove_device(self, device):
+    #def add_device(self, )
+
+    def _remove_device(self, device):
         self.dev_set.remove(device)
 
-    def add_peer_namespace(self, pns):
+    def _add_peer_namespace(self, pns):
         self.ns_set.add(pns)
 
-    def remove_peer_namespace(self, pns):
+    def _remove_peer_namespace(self, pns):
         self.ns_set.remove(pns)
 
 '''Test Namespace
@@ -130,5 +129,9 @@ with Namespace("/tmp/dev_list", "/tmp/ns_list") as ns:
     ns.add_peer_namespace(pns0)
     ns.add_peer_namespace(pns1)
     ns.add_peer_namespace(pns2)
-    ns.remove_peer_namespace(pns1)
-''' 
+    ns.remove_peer_namespace(pns1) 
+    print ns.get_device_list()
+    print ns.get_peer_ns_list()
+
+    ns.sync_local_storage()
+'''

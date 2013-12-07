@@ -10,6 +10,11 @@ __version__     = "0.1"
 
 import time
 import json
+import os
+from OpenSSL    import crypto, SSL
+from time       import gmtime, mktime
+from X509       import X509, X509Error
+from keychain   import KeyChain
 
 class DeviceError():
     def __init__(self, value):
@@ -50,6 +55,38 @@ class Device():
         else:
             self.int_ts = ts
 
+    #def join_namespace(self, ns_name, connection):
+    def join_namespace(self, ns_name):
+        key_chain_name = str(self.dev_id)+"."+ns_name+".kc"
+        if os.path.exists("/tmp/"+key_chain_name):
+            raise X509Error("Certificate exists: "+key_chain_name)
+        #Generate private/public key pair
+        pkey = crypto.PKey()
+        pkey.generate_key(crypto.TYPE_RSA, 1024)
+        #TODO: Read these values from the configyration file
+        country    = "US"
+        state      = "NJ"
+        city       = "Princeton"
+        kc_passwd  = "1234"
+        x509 = X509(str(self.dev_id), pkey, ns_name, country, state, 
+                    city)
+        x509.forge_certificate(False)
+        rec = x509.get_PEM_certificate()
+        cert_pem = rec[0]
+        key_pem  = rec[1]
+        self.certx = cert_pem 
+        #TODO:
+        #This method needs a connection as an input to it.
+        #We will send the cert_pem to the NS node and get it signed. 
+        #...
+        #signed_cert_pem = connection.sign_cert(cert_pem)
+        #...
+        #Now write signed_cert_pem and key_pem to the device keychain
+        signed_cert_pem = cert_pem #delete this once we have a connection
+        kc = KeyChain("/tmp", key_chain_name, kc_passwd)
+        if kc.write_keychain(signed_cert_pem, key_pem) < 0:
+            raise X509Error("Certificate exists: "+key_chain_name)
+
     def __str__(self):
         return self.dev_name+"#"+str(self.dev_id)+"@"+str(self.int_ts)
 
@@ -68,6 +105,10 @@ class Device():
 '''Test Device class
 try:
     dev = Device(10, "iPhone", None)
+    try:
+        dev.join_namespace("wathsala")
+    except X509Error as e:
+        print "Certificate for this device already exists!"
     print dev
     json_dev = json.dumps(dev, cls=DeviceEncoder)
     #print json_dev
