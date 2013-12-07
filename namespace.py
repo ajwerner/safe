@@ -43,13 +43,16 @@ from peer_ns import PeerNSEncoder
 from peer_ns import PeerNSDecoder
 from peer_ns import PeerNSError
 
+from X509 import X509, X509Error
+
 #Setup logging...
 logging.basicConfig(format='%(levelname)s:%(message)s')
 
 class Namespace:
-    def __init__(self, dev_list, ns_list):
+    def __init__(self, ns_name, dev_list, ns_list):
         self.dev_list = dev_list
         self.ns_list = ns_list
+        self.ns_name = ns_name
         self.devl_fd = open(self.dev_list, "a+")
         self.nsl_fd = open(self.ns_list, "a+")
 
@@ -102,7 +105,21 @@ class Namespace:
     def _add_device(self, device):
         self.dev_set.add(device)
 
-    #def add_device(self, )
+    #def add_device(self, connection)
+    def add_device(self, dev): #Remove dev when switching to above prototype
+        #read the device out from the connection...
+        #dev = json.loads(dev_str, cls=DeviceDecoder)
+        ucert_pem = dev.cert_pem
+        x509 = X509.load_certificate_from_keychain(self.ns_name)
+        cert_key = x509.get_certificate()
+        cert = cert_key[0]
+        key  = cert_key[1]
+        dev_x509 = X509.load_certifacate_from_PEM(ucert_pem)
+        dev_x509.sign_certificate(cert, key)
+        dev.cert_pem = dev_x509.get_PEM_certificate()[0]
+        print dev.cert_pem
+        self._add_device(dev)
+        #write the signed certificate dev.cert_pem back to connection 
 
     def _remove_device(self, device):
         self.dev_set.remove(device)
@@ -114,24 +131,15 @@ class Namespace:
         self.ns_set.remove(pns)
 
 '''Test Namespace
-with Namespace("/tmp/dev_list", "/tmp/ns_list") as ns:
-    dev0 = Device(10, "iPhone", None)
-    dev1 = Device(11, "iPad", None)
-    dev2 = Device(12, "MacBook", None)
-    ns.add_device(dev0)
-    ns.add_device(dev1)
-    ns.add_device(dev2)
-    ns.remove_device(dev1)
 
-    pns0 = PeerNS(1000, "Bob", "AAAAAAAAAAAAAAAAAAA")
-    pns1 = PeerNS(1001, "Dac", "AAAAACCCCAAAAAAAAAA")
-    pns2 = PeerNS(1002, "Carla", "AAAAAAFFFFFFFFFFFF")
-    ns.add_peer_namespace(pns0)
-    ns.add_peer_namespace(pns1)
-    ns.add_peer_namespace(pns2)
-    ns.remove_peer_namespace(pns1) 
-    print ns.get_device_list()
-    print ns.get_peer_ns_list()
+from OpenSSL import crypto
+
+with Namespace("wathsala", "/tmp/dev_list", "/tmp/ns_list") as ns:
+    dev0 = Device(10, "iPhone", None)
+    k = crypto.PKey()
+    k.generate_key(crypto.TYPE_RSA, 1024)
+    dev0.join_namespace("wathsala")
+    ns.add_device(dev0)
 
     ns.sync_local_storage()
 '''

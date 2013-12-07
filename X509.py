@@ -41,19 +41,13 @@ class X509:
         self.cert       = cert
 
     def forge_certificate(self, is_self_signed):
-        if is_self_signed == False:
-            self.dev_CN_str = self.dev_id+"."+self.ns_name+".safe.com"
-        else:
-            self.dev_CN_str = self.ns_name+".safe.com"
         self.dev_OU_str = self.ns_name+".safe"
-
         self.cert = crypto.X509()
         self.cert.get_subject().C    = self.dev_C_str
         self.cert.get_subject().ST   = self.dev_ST_str
         self.cert.get_subject().L    = self.dev_L_str
         self.cert.get_subject().O    = "safe"
         self.cert.get_subject().OU   = self.dev_OU_str
-        self.cert.get_subject().CN   = self.dev_CN_str
 
     def sign_certificate(self, signer_cert, signer_key=None):
         self.serial_number = struct.unpack("Q", os.urandom(8))[0]
@@ -63,12 +57,16 @@ class X509:
 
         if signer_cert is None:
             #Self sign the certificate
+            if self.dev_id is None:
+                self.dev_CN_str = self.ns_name+".safe.com"
+            else:
+                self.dev_CN_str = self.dev_id+"."+self.ns_name+".safe.com"
+            self.cert.get_subject().CN   = self.dev_CN_str
             self.cert.set_issuer(self.cert.get_subject())
             self.cert.set_pubkey(self.pkey)
             self.cert.sign(self.pkey, 'sha1')
         else:
             self.cert.set_issuer(signer_cert.get_subject())
-            self.cert.set_pubkey(self.pkey)
             self.cert.sign(signer_key, 'sha1')
 
     @classmethod
@@ -84,7 +82,7 @@ class X509:
 
     @classmethod
     def load_certifacate_from_PEM(cls, PEM_cert):
-        cert = crypto.load_certificate(crypto.FILENAME_PEM, PEM_cert)
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, PEM_cert)
         return cls(None, None, None, None, None, None, cert)
 
     def update_keychain(self, keychain):
@@ -99,7 +97,10 @@ class X509:
 
     def get_PEM_certificate(self):
         cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert)
-        key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, self.pkey)
+        if self.pkey is not None:
+            key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, self.pkey)
+        else:
+            key_pem = None
         return cert_pem, key_pem
 
 

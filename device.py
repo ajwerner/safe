@@ -39,21 +39,31 @@ class DeviceDecoder(json.JSONDecoder):
             raise e
         if dec_str is not None:
             return Device(dec_str['dev_id'], dec_str['dev_name'], 
-                        dec_str['app_obj'], dec_str['int_ts'])
+                        dec_str['app_obj'], dec_str['int_ts'], dec_str['cert_pem'])
         else:
             return None
 
 class Device():
-    def __init__(self, dev_id, dev_name, app_obj, ts=-1):
+    def __init__(self, dev_id, dev_name, app_obj, ts=-1, ns_name=None, cert=None):
         if dev_id < 0 or dev_id > 65535:
             raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
         self.dev_id = dev_id
         self.dev_name = dev_name
         self.app_obj = app_obj
+        self.cert_pem = cert
+        self.ns_name = ns_name
         if ts == -1:
             self.int_ts = time.time()
         else:
             self.int_ts = ts
+
+    @classmethod
+    def load_device(cls):
+        with open("/tmp/"+"dev.cfg", "r") as json_in:
+            dev = json.load(json_in, cls=DeviceDecoder)
+            return cls(dev.dev_id, dev.dev_name, dev.app_obj, 
+                    dev.int_ts, dev.ns_name, dev.cert_pem)
+
 
     #def join_namespace(self, ns_name, connection):
     def join_namespace(self, ns_name):
@@ -71,10 +81,12 @@ class Device():
         x509 = X509(str(self.dev_id), pkey, ns_name, country, state, 
                     city)
         x509.forge_certificate(False)
+        x509.sign_certificate(None)
         rec = x509.get_PEM_certificate()
         cert_pem = rec[0]
         key_pem  = rec[1]
-        self.certx = cert_pem 
+        self.cert_pem = cert_pem 
+        self.ns_name = ns_name
         #TODO:
         #This method needs a connection as an input to it.
         #We will send the cert_pem to the NS node and get it signed. 
@@ -86,6 +98,13 @@ class Device():
         kc = KeyChain("/tmp", key_chain_name, kc_passwd)
         if kc.write_keychain(signed_cert_pem, key_pem) < 0:
             raise X509Error("Certificate exists: "+key_chain_name)
+
+    def sync_local_storage(self):
+        if self.ns_name is not None:
+            with open("/tmp/"+"dev.cfg", "w") as json_out:
+                json.dump(self, json_out, cls=DeviceEncoder)
+        else:
+            raise DeviceError("Device "+str(self.dev_id)+" is not in any namespace")
 
     def __str__(self):
         return self.dev_name+"#"+str(self.dev_id)+"@"+str(self.int_ts)
@@ -103,17 +122,21 @@ class Device():
 
 
 '''Test Device class
+
 try:
     dev = Device(10, "iPhone", None)
     try:
         dev.join_namespace("wathsala")
     except X509Error as e:
         print "Certificate for this device already exists!"
-    print dev
+    #print dev
+    dev.sync_local_storage()
     json_dev = json.dumps(dev, cls=DeviceEncoder)
     #print json_dev
     dev2 = json.loads(json_dev, cls=DeviceDecoder)
     print dev2
+    dev3 = Device.load_device()
+    print dev3
 except DeviceError as e:
     print "Error"
 '''
