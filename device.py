@@ -29,7 +29,6 @@ class DeviceEncoder(json.JSONEncoder):
             return obj.__dict__
         else:
             return json.JSONEncoder.default(self, obj)
-
         
 class DeviceDecoder(json.JSONDecoder):
     def decode(self, json_str):
@@ -37,7 +36,7 @@ class DeviceDecoder(json.JSONDecoder):
             dec_str = json.loads(json_str)
         except ValueError as e:
             raise e
-        if dec_str is not None:
+        if dec_str:
             return Device(dec_str['dev_id'], dec_str['dev_name'], 
                         dec_str['app_obj'], dec_str['int_ts'])
         else:

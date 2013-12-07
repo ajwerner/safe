@@ -44,7 +44,7 @@ class PeerNSDecoder(json.JSONDecoder):
             dec_str = json.loads(json_str)
         except ValueError as e:
             raise e
-        if dec_str is not None:
+        if dec_str:
             return PeerNS(dec_str['ns_id'], dec_str['ns_name'],
                         dec_str['pub_key'], dec_str['ctime'])
         else:

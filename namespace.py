@@ -31,7 +31,12 @@ __version__     = "0.1"
 """
 import os
 import json
+import boto
 import logging
+
+from configuration import Configuration
+
+from boto import dynamodb2, iam
 
 from device import Device
 from device import DeviceEncoder
@@ -43,40 +48,55 @@ from peer_ns import PeerNSEncoder
 from peer_ns import PeerNSDecoder
 from peer_ns import PeerNSError
 
-#Setup logging...
-logging.basicConfig(format='%(levelname)s:%(message)s')
-
 class Namespace:
-    def __init__(self, dev_list, ns_list):
-        self.dev_list = dev_list
-        self.ns_list = ns_list
-        self.devl_fd = open(self.dev_list, "a+")
-        self.nsl_fd = open(self.ns_list, "a+")
+    def __init__(self, conf):
+        self.conf = conf
 
-        self.dev_list_obj = None
+        if conf.local_only:
+            self._init_local()
+        else:
+            self._init_aws()
+
         self.dev_set = set()
+        for dev_dict in self.dev_list:
+            self.dev_set.add(json.loads(dev_dict, cls=DeviceDecoder))
 
-        self.ns_list_obj = None
         self.ns_set = set()
+        for ns_dict in self.ns_list:
+            self.ns_set.add(json.loads(ns_dict, cls=PeerNSDecoder))
+
+    def _init_aws(self):
+        aws_conf = self.conf.aws_conf
+        self.dynamo = boto.connect_dynamodb(aws_conf.access_key, aws_conf.secret_key)     
+        self.iam = boto.connect_iam(aws_conf.access_key, aws_conf.secret_key)
+        
+        response = self.iam.get_user()
+        user = response['get_user_response']['get_user_result']['user']
+        self.id = user['user_id']
+
+        namespace_table = self.dynamo.get_table('namespaces')
+        namespace = namespace_table.get_item(self.id)
+
+        self.ns_list = namespace['ns_list']
+        self.dev_list = namespace['dev_list']
+
+    def _init_local(self):
+        self.devl_fd = open(self.conf.dev_list_path, "a+")
+        self.nsl_fd = open(self.conf.ns_list_path, "a+")
         
         #Parse the device list and pack them in a set
         try:
-            self.dev_list_obj = json.load(self.devl_fd)
-            for dev_dict in self.dev_list_obj:
-                dev_json = json.dumps(dev_dict)
-                self.dev_set.add(json.loads(dev_json, cls=DeviceDecoder))
+            self.dev_list = json.load(self.devl_fd)
+            
         except ValueError as e:
-            logging.warning("%s:%s",self.dev_list, str(e))
+            logging.warning("%s:%s",self.conf.dev_list_path, str(e))
 
         #Parse the namespace list and pack them in a set
         try:
-            self.ns_list_obj = json.load(self.nsl_fd)
-            for ns_dict in self.ns_list_obj:
-                ns_json = json.dumps(ns_dict)
-                self.ns_set.add(json.loads(ns_json, cls=PeerNSDecoder))
-        except ValueError as e:
-            logging.warning("%s:%s", self.ns_list, str(e))
+            self.ns_list = json.load(self.nsl_fd)
 
+        except ValueError as e:
+            logging.warning("%s:%s", self.conf.ns_list_path, str(e))
 
     def __enter__(self):
         return self
@@ -102,8 +122,6 @@ class Namespace:
     def _add_device(self, device):
         self.dev_set.add(device)
 
-    #def add_device(self, )
-
     def _remove_device(self, device):
         self.dev_set.remove(device)
 
@@ -112,6 +130,13 @@ class Namespace:
 
     def _remove_peer_namespace(self, pns):
         self.ns_set.remove(pns)
+
+def main():
+    conf = Configuration()
+    ns = Namespace(conf)
+
+if __name__ == "__main__":
+    main()
 
 '''Test Namespace
 with Namespace("/tmp/dev_list", "/tmp/ns_list") as ns:
