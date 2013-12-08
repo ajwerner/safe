@@ -70,8 +70,8 @@ class X509:
             self.cert.sign(signer_key, 'sha1')
 
     @classmethod
-    def load_certificate_from_keychain(cls, keychain):
-        kc = KeyChain("/tmp", keychain, "1234")
+    def load_certificate_from_keychain(cls, conf, ns_name):
+        kc = KeyChain(conf, ns_name, "1234")
         rec = kc.read_keychain()
         cert_pem = rec[0]
         key_pem  = rec[1]
@@ -85,8 +85,8 @@ class X509:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, PEM_cert)
         return cls(None, None, None, None, None, None, cert)
 
-    def update_keychain(self, keychain):
-        kc = KeyChain("/tmp", keychain, "1234")
+    def update_keychain(self, conf, keychain):
+        kc = KeyChain(conf, keychain, "1234")
         cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert)
         key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, self.pkey)
         if kc.write_keychain(cert_pem, key_pem) < 0:

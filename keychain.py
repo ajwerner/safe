@@ -19,29 +19,33 @@ __version__     = "0.1"
 """
 
 import mmap
-import os
 import struct
 import string
+import traceback
+from os import path, stat
 from ctypes import *
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
+
+from configuration import Configuration
 
 class KeyChain:
     MASTER_KEY_PAIR = 0
     ERROR_KEY_EXIST = 1
     SUCCESS         = 0
 
-    def __init__(self, path, namespace, password):
+    def __init__(self, conf, namespace, password):
         '''
         Keychain constructor, this initializes the keychain.
         '''
+        self.conf = conf
         self.namespace = namespace
         self.password = password
-        self.keychain_path = path+"/"+namespace
+        self.keychain_path = path.join(self.conf.config_dir, namespace+".kc")
         self.kc_key = PBKDF2(password, namespace, 32, 5000)
-        self.kc_file = open(self.keychain_path, "a+")
-        st = os.stat(self.keychain_path)
+        self.kc_file = open(self.keychain_path, 'a+')
+        st = stat(self.keychain_path)
 
 
     def read_keychain(self):
@@ -68,6 +72,7 @@ class KeyChain:
         '''
         Write certificate of and the KeyChain.
         '''
+        #traceback.print_stack()
         rec = self.read_keychain()
         if rec is not None:
             return -KeyChain.ERROR_KEY_EXIST
