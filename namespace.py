@@ -37,10 +37,8 @@ import copy
 
 from configuration import Configuration
 
-from boto import dynamodb2, iam
-from boto.dynamodb2.items import Item
-from boto.dynamodb2.table import Table
-from boto.dynamodb2.exceptions import DynamoDBError
+from boto import iam
+from boto import dynamodb
 from boto.dynamodb.exceptions import DynamoDBKeyNotFoundError
 
 from safe_list import SafeList
@@ -111,29 +109,26 @@ class Namespace(object):
 
     def _init_aws(self):
         aws_conf = self.conf.aws_conf
-        self.dynamo = boto.connect_dynamodb(aws_conf.access_key, aws_conf.secret_key)     
+        self.dynamo = boto.connect_dynamodb(aws_conf.access_key, aws_conf.secret_key)
         self.iam = boto.connect_iam(aws_conf.access_key, aws_conf.secret_key)
         
         response = self.iam.get_user()
         user = response['get_user_response']['get_user_result']['user']
         self.id = user['user_id']
+        print self.id
 
     def _reconcile_state(self):
         if self.conf.local_only:
             return
         namespace_table = self.dynamo.get_table('namespaces')
         try:
-            self.serialized = namespace_table.get_item(self.id)
+            self.serialized = namespace_table.get_item(hash_key=self.id)
         except DynamoDBKeyNotFoundError as e:
             self.ns_list = SafeList("", cls=PeerNS)
             self.dev_list = SafeList("", cls=Device)
-            serialized = {
-                    'user_id': self.id,
-                    'ns_list': self.ns_list.serialize(), 
-                    'dev_list': self.dev_list.serialize(), 
-                    'metadata': '{}'}
-            self.serialized = Item(namespace_table, data=serialized)
-            self.serialized.save()
+            self.metadata = {}
+            self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
+            self.serialized.put()
             return
 
         if hasattr(self, 'ns_list'):
