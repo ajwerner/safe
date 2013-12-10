@@ -34,6 +34,7 @@ import json
 import boto
 import logging
 import copy
+from tofu import *
 
 from configuration import Configuration
 
@@ -194,10 +195,12 @@ class Namespace(object):
     def _add_device(self, device):
         self.dev_list.add(device)
 
-    #def add_device(self, connection)
-    def add_device(self, dev): #Remove dev when switching to above prototype
+    def add_device(self, connection):
+    #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
-        #dev = json.loads(dev_str, cls=DeviceDecoder)
+        json_dev_str = connection.receive()
+        print repr(json_dev_str)
+        dev = json.loads(json_dev_str, cls=Device.DECODER)
         ucert_pem = dev.cert_pem
         x509 = X509.load_certificate_from_keychain(self.conf, self.ns_name)
         cert_key = x509.get_certificate()
@@ -208,6 +211,7 @@ class Namespace(object):
         dev.cert_pem = dev_x509.get_PEM_certificate()[0]
         self._add_device(dev)
         #write the signed certificate dev.cert_pem back to connection 
+        connection.send(dev.cert_pem)
 
     @transaction
     def _remove_device(self, device):
@@ -229,10 +233,11 @@ def main():
     from OpenSSL import crypto
     with Namespace(conf, "foo") as ns:
         dev0 = Device(10, "iPhone", None, conf=conf)
-        k = crypto.PKey()
-        k.generate_key(crypto.TYPE_RSA, 1024)
-        dev0.join_namespace("wathsala")
-        ns.add_device(dev0)
+        #k = crypto.PKey()
+        #k.generate_key(crypto.TYPE_RSA, 1024)
+        #dev0.join_namespace("wathsala")
+        tc = tofu("123456")
+        ns.add_device(tc)
         #ns.sync_local_storage()
 
 if __name__ == "__main__":

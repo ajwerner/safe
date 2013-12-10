@@ -12,6 +12,9 @@ class tofu(object):
   flag = 1
   enc=''
 
+  def __init__(self, one_time_pad):
+      self.one_time_pad = one_time_pad
+
   def messageCB(self, conn, msg):
     msg=str(msg.getBody())
     self.enc=base64.decodestring(msg)
@@ -28,12 +31,12 @@ class tofu(object):
     while self.StepOn(conn):
       pass
   
-  def send(self, receiver, message, one_time_pad):
+  def send(self, receiver, message):
     BS = 16
     pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
     tojid=receiver
     text=pad(message)
-    key=hashlib.sha256(one_time_pad).digest()
+    key=hashlib.sha256(self.one_time_pad).digest()
     iv = Random.new().read(AES.block_size)
     obj=AES.new(key, AES.MODE_CBC, iv)
     text=iv+obj.encrypt(text)
@@ -73,7 +76,7 @@ class tofu(object):
 
     cl.send(xmpp.protocol.Message(tojid,text))
 
-  def receive(self, one_time_pad):
+  def receive(self):
     
     jidparams={}
     if os.access(os.environ['HOME']+'/.safe_receive', os.R_OK):
@@ -110,7 +113,7 @@ class tofu(object):
     self.GoOn(cl)
 
     unpad = lambda s : s[0:-ord(s[-1])]
-    key=hashlib.sha256(one_time_pad).digest()
+    key=hashlib.sha256(self.one_time_pad).digest()
     iv=self.enc[:16]
     obj2 = AES.new(key, AES.MODE_CBC, iv)
     shared_key=obj2.decrypt(self.enc[16:])
@@ -118,3 +121,7 @@ class tofu(object):
     #time.sleep(1)
 
     return shared_key
+
+#tf = tofu("123456789")
+#tf.send("safe_device2@is-a-furry.org", "Hello World")
+
