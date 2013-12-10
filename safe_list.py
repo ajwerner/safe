@@ -34,7 +34,7 @@ class SafeList(object):
         obj_dict_list = json.loads(serialization)
         if not obj_dict_list:
             return
-        for obj_str in map(json.dumps, obj_dict_list):
+        for obj_str in obj_dict_list:
             if not obj_str:
                 continue
             obj = json.loads(obj_str, cls=self.decoder)
