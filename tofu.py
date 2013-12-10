@@ -7,6 +7,10 @@ import hashlib
 from Crypto import Random
 from Crypto.Cipher import AES
 
+BS=16
+pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+unpad = lambda s : s[0:-ord(s[-1])]
+
 class tofu(object):
  
   flag = 1
@@ -32,8 +36,8 @@ class tofu(object):
       pass
   
   def send(self, receiver, message):
-    BS = 16
-    pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+    #BS = 16
+    #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
     tojid=receiver
     text=pad(message)
     key=hashlib.sha256(self.one_time_pad).digest()
@@ -112,11 +116,11 @@ class tofu(object):
 
     self.GoOn(cl)
 
-    unpad = lambda s : s[0:-ord(s[-1])]
+    #unpad = lambda s : s[0:-ord(s[-1])]
     key=hashlib.sha256(self.one_time_pad).digest()
     iv=self.enc[:16]
     obj2 = AES.new(key, AES.MODE_CBC, iv)
-    shared_key=obj2.decrypt(self.enc[16:])
+    shared_key=unpad(obj2.decrypt(self.enc[16:]))
 
     #time.sleep(1)
 
