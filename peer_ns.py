@@ -34,7 +34,7 @@ class PeerNSError():
 class PeerNSEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, PeerNS):
-            return json.dumps(str(obj.__dict__))
+            return json.dumps(obj.__dict__)
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -51,6 +51,9 @@ class PeerNSDecoder(json.JSONDecoder):
             return None
 
 class PeerNS:
+    ENCODER = PeerNSEncoder
+    DECODER = PeerNSDecoder
+
     def __init__(self, ns_id, ns_name, pub_key, ts=-1):
         if not isinstance(ns_id, int):
             raise PeerNSError("Bad Namespace ID (ns_id="+str(ns_id)+")")

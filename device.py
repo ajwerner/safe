@@ -32,22 +32,24 @@ class DeviceEncoder(json.JSONEncoder):
             return json.dumps(obj.__dict__)
         else:
             return json.JSONEncoder.default(self, obj)
-
         
 class DeviceDecoder(json.JSONDecoder):
     def decode(self, json_str):
         try:
-            dec_str = json.loads(str(json_str))
+            dec_dict = json.loads(str(json_str))
         except ValueError as e:
             raise e
-        if dec_str is not None:
-            return Device(dec_str['dev_id'], dec_str['dev_name'], 
-                        dec_str['app_obj'], dec_str['int_ts'], dec_str['cert_pem'])
+        if dec_dict is not None:
+            return Device(dec_dict['dev_id'], dec_dict['dev_name'], 
+                        dec_dict['app_obj'], dec_dict['int_ts'], cert=dec_dict['cert_pem'])
         else:
             return None
 
 class Device():
-    def __init__(self, dev_id, dev_name, app_obj, conf, ts=-1, ns_name=None, cert=None):
+    DECODER = DeviceDecoder
+    ENCODER = DeviceEncoder
+
+    def __init__(self, dev_id, dev_name, app_obj, conf=None, ts=-1, ns_name=None, cert=None):
         if dev_id < 0 or dev_id > 65535:
             raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
         self.dev_id = dev_id
