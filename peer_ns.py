@@ -34,7 +34,7 @@ class PeerNSError():
 class PeerNSEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, PeerNS):
-            return obj.__dict__
+            return json.dumps(str(obj.__dict__))
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -44,7 +44,7 @@ class PeerNSDecoder(json.JSONDecoder):
             dec_str = json.loads(json_str)
         except ValueError as e:
             raise e
-        if dec_str is not None:
+        if dec_str:
             return PeerNS(dec_str['ns_id'], dec_str['ns_name'],
                         dec_str['pub_key'], dec_str['ctime'])
         else:
