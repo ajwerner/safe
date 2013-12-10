@@ -3,6 +3,8 @@
 #Date: 12/10/13
 
 import sys, os, xmpp, time, base64
+import hashlib
+from Crypto import Random
 from Crypto.Cipher import AES
 
 class tofu(object):
@@ -31,8 +33,10 @@ class tofu(object):
     pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
     tojid=receiver
     text=pad(message)
-    obj=AES.new(one_time_pad, AES.MODE_CBC, 'This is an IV456')
-    text=obj.encrypt(text)
+    key=hashlib.sha256(one_time_pad).digest()
+    iv = Random.new().read(AES.block_size)
+    obj=AES.new(key, AES.MODE_CBC, iv)
+    text=iv+obj.encrypt(text)
     text=base64.encodestring(text)
 
     jidparams = {}
@@ -105,9 +109,11 @@ class tofu(object):
 
     self.GoOn(cl)
 
-    unpad = lambda s : s[0:-ord(s[-1])]    
-    obj2 = AES.new(one_time_pad, AES.MODE_CBC, 'This is an IV456')
-    shared_key=obj2.decrypt(self.enc)
+    unpad = lambda s : s[0:-ord(s[-1])]
+    key=hashlib.sha256(one_time_pad).digest()
+    iv=self.enc[:16]
+    obj2 = AES.new(key, AES.MODE_CBC, iv)
+    shared_key=obj2.decrypt(self.enc[16:])
 
     #time.sleep(1)
 
