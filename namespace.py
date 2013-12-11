@@ -98,7 +98,7 @@ class Namespace(object):
     def _self_sign(self):
         self.keychain_path = os.path.join(self.conf.config_dir, self.conf.aws_conf['aws_username'])
         if not os.path.exists(self.keychain_path):
-            create_keychain(self.keychain_path, self.conf)
+            create_keychain(self.keychain_path, None, self.conf)
         '''k = crypto.PKey()
         k.generate_key(crypto.TYPE_RSA, 1024)
         try:

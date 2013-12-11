@@ -26,7 +26,7 @@ from boto import dynamodb2, iam
 CONF_PATH       = 'config.json'
 DEV_LIST_PATH   = 'dev_list.json'
 NS_LIST_PATH    = 'ns_list.json'
-KEYCAIN_PATH    = 'device_keychain.kc'
+KEYCHAIN_PATH    = 'device_keychain.kc'
 
 AWS_USERNAME = 'aws_username'
 AWS_ACCESS_KEY = 'aws_access_key_id'
@@ -56,13 +56,13 @@ def create_config(conf_path):
         json_string = json.dumps(conf)
         aws_conf_file.write(json_string) 
 
-def create_keychain(keychain_path, conf):
+def create_keychain(keychain_path, dev_id ,conf):
         print "Enter information for device certificate"
         kc_passwd = getpass.getpass("Device Keychain Password: ")
 
         pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
-        x509 = X509(conf.dev_conf['dev_name'], pkey, 
+        x509 = X509(dev_id, pkey, 
                     conf.aws_conf[AWS_USERNAME],
                     conf.user_conf['country'], 
                     conf.user_conf['state'], 
@@ -102,9 +102,9 @@ class Configuration(object):
         self.user_conf = self.conf['user_conf']
 
         # init 
-        keychain_path = path.join(config_dir, KEYCAIN_PATH)
+        keychain_path = path.join(config_dir, KEYCHAIN_PATH)
         if not path.exists(keychain_path):
-            create_keychain(keychain_path, self)
+            create_keychain(keychain_path, self.dev_conf['dev_name'], self)
         self.dev_keychain = KeyChain(keychain_path, self.dev_conf['dev_name'], getpass.getpass("Device Keychain Password: "))
 
 
