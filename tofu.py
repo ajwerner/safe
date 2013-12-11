@@ -10,6 +10,7 @@ __version__     = "0.1"
 
 import sys, os, xmpp, time, base64
 import hashlib
+import getpass
 from Crypto import Random
 from Crypto.Cipher import AES
 
@@ -18,22 +19,35 @@ BS=16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[0:-ord(s[-1])]
 
+
+def input_callback():
+  j_id = raw_input("User ID: ")#+"@is-a-furry.org"
+  j_pwd = getpass.getpass("Password: ")
+  rcpt = raw_input("To: ")#+"@is-a-furry.org"
+  otp = raw_input("Enter One-Time-Pad: ")
+  return {'j_id':j_id, 'j_pwd':j_pwd, 'rcpt':rcpt, 'otp':otp}
+
 class tofu(object):
  
   #flag = 1
   #enc=''
 
-  def __init__(self, one_time_pad, j_id, j_pwd, receiver):
-      self.one_time_pad = one_time_pad
-      self.j_id=j_id
-      self.j_pwd=j_pwd
-      self.receiver=receiver
+#  def __init__(self, one_time_pad, j_id, j_pwd, receiver):
+  def __init__(self, f):
+      rec = f()
+      self.one_time_pad = rec['otp']
+      self.j_id= rec['j_id']
+      self.j_pwd= rec['j_pwd']
+      self.receiver= rec['rcpt']
       self.flag=1
       self.enc=''
-
+ 
   def messageCB(self, conn, msg):
-    msg=str(msg.getBody())
-    self.enc=base64.decodestring(msg)
+    msg_body=str(msg.getBody())
+    sender = str(msg.getFrom()).split('/')[0]
+    if sender != self.receiver:
+        return
+    self.enc=base64.decodestring(msg_body)
     self.flag = 0
 
   def StepOn(self, conn):
@@ -79,7 +93,7 @@ class tofu(object):
     cl = xmpp.Client(jid.getDomain(), debug=[])
 
     try:
-      con=cl.connect()
+      con=cl.connect(server=('talk.google.com', 5222))
     except IOError as e:
       print e
     if not con:
@@ -114,7 +128,7 @@ class tofu(object):
     jid=xmpp.protocol.JID(self.j_id)
     cl=xmpp.Client(jid.getDomain(),debug=[])
 
-    con=cl.connect()
+    con=cl.connect(server=('talk.google.com', 5222))
     if not con:
       print 'could not connect!'
       sys.exit()

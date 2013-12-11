@@ -75,7 +75,7 @@ def create_keychain(keychain_path, dev_id ,conf):
 
         kc = KeyChain(keychain_path, conf.dev_conf['dev_name'], kc_passwd)
         if kc.write_keychain(cert_pem, key_pem) < 0:
-            raise X509Error("Certificate exists: "+keychain_name)
+            raise X509Error("Certificate exists: "+keychain_path)
 
 class Configuration(object):
     REGION = 'us-east-1'

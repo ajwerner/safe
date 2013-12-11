@@ -68,7 +68,6 @@ class Device():
             self.cert_pem = self.keychain.read_keychain()[0]
         else:
             self.cert_pem = cert
-        print self._conf
         if ts == -1:
             self.int_ts = time.time()
         else:
@@ -83,36 +82,10 @@ class Device():
 
 
     def join_namespace(self, ns_name, connection):
-    #def join_namespace(self, ns_name):
-        #Generate private/public key pair
-        '''pkey = crypto.PKey()
-        pkey.generate_key(crypto.TYPE_RSA, 1024)
-        #TODO: Read these values from the configyration file
-        country    = "US"
-        state      = "NJ"
-        city       = "Princeton"
-        kc_passwd  = "1234"
-        x509 = X509(str(self.dev_id), pkey, ns_name, country, state, 
-                    city)
-        x509.forge_certificate(False)
-        x509.sign_certificate(None)
-        rec = x509.get_PEM_certificate()
-        cert_pem = rec[0]
-        key_pem  = rec[1]
-        self.cert_pem = cert_pem 
-        self.ns_name = ns_name
-        keychain_name = str(self.dev_id)+"."+self.ns_name'''
-        #TODO:
-        #This method needs a connection as an input to it.
-        #We will send the cert_pem to the NS node and get it signed. 
         dev_json_str = json.dumps(self, cls=Device.ENCODER)
         connection.send(dev_json_str)
-        print "Sent...."
         signed_cert_pem = connection.receive()
-        print ">>>> "+signed_cert_pem
-        #...
-        #Now write signed_cert_pem and key_pem to the device keychain
-        #signed_cert_pem = cert_pem #delete this once we have a connection
+        print signed_cert_pem
         self.keychain.update_keychain(signed_cert_pem)
 
     def sync_local_storage(self):

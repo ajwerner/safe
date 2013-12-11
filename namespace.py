@@ -96,19 +96,9 @@ class Namespace(object):
         }
 
     def _self_sign(self):
-        self.keychain_path = os.path.join(self.conf.config_dir, self.conf.aws_conf['aws_username'])
+        self.keychain_path = os.path.join(self.conf.config_dir, self.conf.aws_conf['aws_username']+".kc")
         if not os.path.exists(self.keychain_path):
             create_keychain(self.keychain_path, None, self.conf)
-        '''k = crypto.PKey()
-        k.generate_key(crypto.TYPE_RSA, 1024)
-        try:
-            #Create the self signed namespace certficate
-            x509 = X509("", k, self.name, "US", "NJ", "Princeton")
-            x509.forge_certificate(True)
-            x509.sign_certificate(None)
-            x509.update_keychain(self.conf.config_dir, self.name)
-        except X509Error as e:
-            print str(e)'''
 
     def _init_aws(self):
         aws_conf = self.conf.aws_conf
@@ -118,7 +108,6 @@ class Namespace(object):
         response = self.iam.get_user()
         user = response['get_user_response']['get_user_result']['user']
         self.id = user['user_id']
-        print self.id
 
     def _reconcile_state(self):
         if self.conf.local_only:
@@ -201,10 +190,8 @@ class Namespace(object):
     #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
         json_dev_str = connection.receive()
-        print json_dev_str
         dev = json.loads(json_dev_str, cls=Device.DECODER)
         ucert_pem = dev.cert_pem
-        print ">>>>>> "+self.keychain_path
         x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
         cert_key = x509.get_certificate()
         cert = cert_key[0]
@@ -241,7 +228,8 @@ def main():
 
     from OpenSSL import crypto
     with Namespace(conf) as ns:
-        tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
+        #tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
+        tc = tofu(input_callback)
         ns.add_device(tc)
 
 if __name__ == "__main__":
