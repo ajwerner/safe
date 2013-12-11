@@ -10,6 +10,7 @@ __version__     = "0.1"
 
 import time
 import json
+import tofu
 from os             import path
 from configuration  import Configuration
 from OpenSSL        import crypto, SSL
@@ -71,8 +72,8 @@ class Device():
                     conf, dev.int_ts, dev.ns_name, dev.cert_pem)
 
 
-    #def join_namespace(self, ns_name, connection):
-    def join_namespace(self, ns_name):
+    def join_namespace(self, ns_name, connection):
+    #def join_namespace(self, ns_name):
         #Generate private/public key pair
         pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
@@ -94,11 +95,12 @@ class Device():
         #TODO:
         #This method needs a connection as an input to it.
         #We will send the cert_pem to the NS node and get it signed. 
-        #...
-        #signed_cert_pem = connection.sign_cert(cert_pem)
+        dev_json_str = json.dumps(self, cls=DeviceEncoder)
+        connection.send("safe_device2@is-a-furry.org", dev_json_str)
+        signed_cert_pem = connection.receive()
         #...
         #Now write signed_cert_pem and key_pem to the device keychain
-        signed_cert_pem = cert_pem #delete this once we have a connection
+        #signed_cert_pem = cert_pem #delete this once we have a connection
         kc = KeyChain(self._conf, keychain_name, kc_passwd)
         if kc.write_keychain(signed_cert_pem, key_pem) < 0:
             raise X509Error("Certificate exists: "+keychain_name)
