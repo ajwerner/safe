@@ -28,22 +28,18 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 
-from configuration import Configuration
-
 class KeyChain:
     MASTER_KEY_PAIR = 0
     ERROR_KEY_EXIST = 1
     SUCCESS         = 0
 
-    def __init__(self, conf, namespace, password):
+    def __init__(self, keychain_path, name, password):
         '''
         Keychain constructor, this initializes the keychain.
         '''
-        self.conf = conf
-        self.namespace = namespace
         self.password = password
-        self.keychain_path = path.join(self.conf.config_dir, namespace+".kc")
-        self.kc_key = PBKDF2(password, namespace, 32, 5000)
+        self.keychain_path = keychain_path
+        self.kc_key = PBKDF2(password, name, 32, 5000)
         self.kc_file = open(self.keychain_path, 'a+')
         st = stat(self.keychain_path)
 
