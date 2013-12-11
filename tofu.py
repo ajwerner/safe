@@ -23,8 +23,11 @@ class tofu(object):
   #flag = 1
   #enc=''
 
-  def __init__(self, one_time_pad):
+  def __init__(self, one_time_pad, j_id, j_pwd, receiver):
       self.one_time_pad = one_time_pad
+      self.j_id=j_id
+      self.j_pwd=j_pwd
+      self.receiver=receiver
       self.flag=1
       self.enc=''
 
@@ -44,10 +47,10 @@ class tofu(object):
     while self.StepOn(conn):
       pass
   
-  def send(self, receiver, message):
+  def send(self, message):
     #BS = 16
     #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
-    tojid=receiver
+    tojid=self.receiver
 
     #padding the message and encrypting it
     text=pad(message)
@@ -57,21 +60,22 @@ class tofu(object):
     text=iv+obj.encrypt(text)
     text=base64.encodestring(text)
 
-    jidparams = {}
-    if os.access(os.environ['HOME']+'/.safe_send', os.R_OK):
-      for ln in open(os.environ['HOME']+'/.safe_send').readlines():
-        if not ln[0] in ('#', ';'):
-          key, val = ln.strip().split('=',1)
-          jidparams[key.lower()]=val
+    #jidparams = {}
+    #if os.access(os.environ['HOME']+'/.safe_send', os.R_OK):
+      #for ln in open(os.environ['HOME']+'/.safe_send').readlines():
+        #if not ln[0] in ('#', ';'):
+          #key, val = ln.strip().split('=',1)
+          #jidparams[key.lower()]=val
 
-    for mandatory in ['jid', 'password']:
-      if mandatory not in jidparams.keys():
-        open(os.environ['HOME']+'/.safe_send',
-            'w').write('JID=safe_device1@is-a-furry.org\nPASSWORD=safepassword\n')
-        print 'please point ~/.safe_send config file to valid JID for sending messages.'
-        sys.exit(0)
+    #for mandatory in ['jid', 'password']:
+      #if mandatory not in jidparams.keys():
+        #open(os.environ['HOME']+'/.safe_send',
+            #'w').write('JID=safe_device1@is-a-furry.org\nPASSWORD=safepassword\n')
+        #print 'please point ~/.safe_send config file to valid JID for sending messages.'
+        #sys.exit(0)
 
-    jid = xmpp.protocol.JID(jidparams['jid'])
+    #jid = xmpp.protocol.JID(jidparams['jid'])
+    jid = xmpp.protocol.JID(self.j_id)
     cl = xmpp.Client(jid.getDomain(), debug=[])
 
     try:
@@ -82,7 +86,7 @@ class tofu(object):
       print 'could not connect!'
       sys.exit()
     #print 'connected with', con
-    auth = cl.auth(jid.getNode(), jidparams['password'],
+    auth = cl.auth(jid.getNode(), self.j_pwd,
         resource=jid.getResource())
     if not auth:
       print 'could not authenticate!'
@@ -93,20 +97,21 @@ class tofu(object):
 
   def receive(self):
     
-    jidparams={}
-    if os.access(os.environ['HOME']+'/.safe_receive', os.R_OK):
-      for ln in open(os.environ['HOME']+'/.safe_receive').readlines():
-        if not ln[0] in ('#', ';'):
-          key,val=ln.strip().split('=',1)
-          jidparams[key.lower()]=val
-    for mandatory in ['jid', 'password']:
-      if mandatory not in jidparams.keys():
-        open(os.environ['HOME']+'/.safe_receive','w').write('JID=safe_device2@is-a-furry.org\nPASSWORD=safepassword\n')
-        print 'Please point ~/.safe_receive config file to valid JID receiving messages'
-        
-        sys.exit(0)
 
-    jid=xmpp.protocol.JID(jidparams['jid'])
+    #jidparams={}
+    #if os.access(os.environ['HOME']+'/.safe_receive', os.R_OK):
+      #for ln in open(os.environ['HOME']+'/.safe_receive').readlines():
+        #if not ln[0] in ('#', ';'):
+          #key,val=ln.strip().split('=',1)
+          #jidparams[key.lower()]=val
+    #for mandatory in ['jid', 'password']:
+      #if mandatory not in jidparams.keys():
+        #open(os.environ['HOME']+'/.safe_receive','w').write('JID=safe_device2@is-a-furry.org\nPASSWORD=safepassword\n')
+        #print 'Please point ~/.safe_receive config file to valid JID receiving messages'
+        #sys.exit(0)
+
+    #jid=xmpp.protocol.JID(jidparams['jid'])
+    jid=xmpp.protocol.JID(self.j_id)
     cl=xmpp.Client(jid.getDomain(),debug=[])
 
     con=cl.connect()
@@ -114,7 +119,7 @@ class tofu(object):
       print 'could not connect!'
       sys.exit()
     #print 'connected with', con
-    auth=cl.auth(jid.getNode(), jidparams['password'],
+    auth=cl.auth(jid.getNode(), self.j_pwd,
       resource=jid.getResource())
     if not auth:
       print 'could not authenticate!'
