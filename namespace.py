@@ -36,7 +36,7 @@ import logging
 import copy
 from tofu import *
 
-from configuration import Configuration
+from configuration import Configuration, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
 
 from boto import iam
 from boto import dynamodb
@@ -76,9 +76,9 @@ def transaction(f):
     return wrapped
 
 class Namespace(object):    
-    def __init__(self, conf, ns_name=None):
+    def __init__(self, conf):
         self.conf = conf
-        self.ns_name = ns_name
+        self.name = conf.aws_conf[AWS_USERNAME]
 
         if conf.local_only:
             self._init_local()
@@ -86,7 +86,6 @@ class Namespace(object):
             self._init_aws()
 
         self._reconcile_state()
-        self._self_sign() 
 
     def serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
@@ -101,17 +100,17 @@ class Namespace(object):
         k.generate_key(crypto.TYPE_RSA, 1024)
         try:
             #Create the self signed namespace certficate
-            x509 = X509("", k, self.ns_name, "US", "NJ", "Princeton")
+            x509 = X509("", k, self.name, "US", "NJ", "Princeton")
             x509.forge_certificate(True)
             x509.sign_certificate(None)
-            x509.update_keychain(self.conf, self.ns_name)
+            x509.update_keychain(self.conf.config_dir, self.name)
         except X509Error as e:
             print str(e)
 
     def _init_aws(self):
         aws_conf = self.conf.aws_conf
-        self.dynamo = boto.connect_dynamodb(aws_conf.access_key, aws_conf.secret_key)
-        self.iam = boto.connect_iam(aws_conf.access_key, aws_conf.secret_key)
+        self.dynamo = boto.connect_dynamodb(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
+        self.iam = boto.connect_iam(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
         
         response = self.iam.get_user()
         user = response['get_user_response']['get_user_result']['user']
@@ -201,7 +200,7 @@ class Namespace(object):
         json_dev_str = connection.receive()
         dev = json.loads(json_dev_str, cls=Device.DECODER)
         ucert_pem = dev.cert_pem
-        x509 = X509.load_certificate_from_keychain(self.conf, self.ns_name)
+        x509 = X509.load_certificate_from_keychain(self.conf, self.name)
         cert_key = x509.get_certificate()
         cert = cert_key[0]
         key  = cert_key[1]
@@ -226,6 +225,10 @@ class Namespace(object):
     def _remove_peer_namespace(self, pns):
         self.ns_set.remove(pns)
         # disallow the peer namespace from accessing the metadata
+
+    @transaction
+    def update_metadata(self, new_metadata):
+        self.metadata = new_metadata
 
 def main():
     conf = Configuration(".safe_config", True)
