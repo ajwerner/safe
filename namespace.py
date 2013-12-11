@@ -199,7 +199,6 @@ class Namespace(object):
     #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
         json_dev_str = connection.receive()
-        print repr(json_dev_str)
         dev = json.loads(json_dev_str, cls=Device.DECODER)
         ucert_pem = dev.cert_pem
         x509 = X509.load_certificate_from_keychain(self.conf, self.ns_name)
@@ -212,6 +211,7 @@ class Namespace(object):
         self._add_device(dev)
         #write the signed certificate dev.cert_pem back to connection 
         connection.send(dev.cert_pem)
+        print dev.cert_pem
 
     @transaction
     def _remove_device(self, device):
@@ -228,15 +228,15 @@ class Namespace(object):
         # disallow the peer namespace from accessing the metadata
 
 def main():
-    conf = Configuration(".safe_config")
+    conf = Configuration(".safe_config", True)
 
     from OpenSSL import crypto
     with Namespace(conf, "foo") as ns:
-        dev0 = Device(10, "iPhone", None, conf=conf)
+        #dev0 = Device(10, "iPhone", None, conf=conf)
         #k = crypto.PKey()
         #k.generate_key(crypto.TYPE_RSA, 1024)
         #dev0.join_namespace("wathsala")
-        tc = tofu("123456")
+        tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
         ns.add_device(tc)
         #ns.sync_local_storage()
 

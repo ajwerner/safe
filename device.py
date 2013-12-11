@@ -11,6 +11,7 @@ __version__     = "0.1"
 import time
 import json
 import tofu
+import copy
 from os             import path
 from configuration  import Configuration
 from OpenSSL        import crypto, SSL
@@ -28,9 +29,10 @@ class DeviceError():
 class DeviceEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Device):
-            if '_conf' in obj.__dict__:
-                del obj.__dict__['_conf']
-            return json.dumps(obj.__dict__)
+            obj_dict = copy.deepcopy(obj.__dict__)
+            if '_conf' in obj_dict:
+                del obj_dict['_conf']
+            return obj_dict
         else:
             return json.JSONEncoder.default(self, obj)
         
@@ -41,8 +43,9 @@ class DeviceDecoder(json.JSONDecoder):
         except ValueError as e:
             raise e
         if dec_dict is not None:
-            return Device(dec_dict['dev_id'], dec_dict['dev_name'], 
-                        dec_dict['app_obj'], dec_dict['int_ts'], cert=dec_dict['cert_pem'])
+            return Device(dec_dict['dev_id'], dec_dict['dev_name'], dec_dict['app_obj'], 
+                            conf=None, ts=dec_dict['int_ts'], ns_name=dec_dict['ns_name'], 
+                            cert=dec_dict['cert_pem'])
         else:
             return None
 
@@ -59,6 +62,7 @@ class Device():
         self.cert_pem = cert
         self.ns_name = ns_name
         self._conf = conf
+        print self._conf
         if ts == -1:
             self.int_ts = time.time()
         else:
@@ -95,9 +99,11 @@ class Device():
         #TODO:
         #This method needs a connection as an input to it.
         #We will send the cert_pem to the NS node and get it signed. 
-        dev_json_str = json.dumps(self, cls=DeviceEncoder)
-        connection.send("safe_device2@is-a-furry.org", dev_json_str)
+        dev_json_str = json.dumps(self, cls=Device.ENCODER)
+        connection.send(dev_json_str)
+        print "Sent...."
         signed_cert_pem = connection.receive()
+        print ">>>> "+signed_cert_pem
         #...
         #Now write signed_cert_pem and key_pem to the device keychain
         #signed_cert_pem = cert_pem #delete this once we have a connection
