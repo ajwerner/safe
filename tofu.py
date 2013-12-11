@@ -45,8 +45,8 @@ class tofu(object):
   def messageCB(self, conn, msg):
     msg_body=str(msg.getBody())
     sender = str(msg.getFrom()).split('/')[0]
-    if sender != self.receiver:
-        return
+    #if sender != self.receiver:
+    #    return
     self.enc=base64.decodestring(msg_body)
     self.flag = 0
 
