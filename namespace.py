@@ -36,7 +36,7 @@ import logging
 import copy
 from tofu import *
 
-from configuration import Configuration, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
+from configuration import Configuration, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY, create_keychain
 
 from boto import iam
 from boto import dynamodb
@@ -84,7 +84,7 @@ class Namespace(object):
             self._init_local()
         else:
             self._init_aws()
-
+        self._self_sign()
         self._reconcile_state()
 
     def serialize(self):
@@ -96,7 +96,10 @@ class Namespace(object):
         }
 
     def _self_sign(self):
-        k = crypto.PKey()
+        self.keychain_path = os.path.join(self.conf.config_dir, self.conf.aws_conf['aws_username'])
+        if not os.path.exists(self.keychain_path):
+            create_keychain(self.keychain_path, self.conf)
+        '''k = crypto.PKey()
         k.generate_key(crypto.TYPE_RSA, 1024)
         try:
             #Create the self signed namespace certficate
@@ -105,7 +108,7 @@ class Namespace(object):
             x509.sign_certificate(None)
             x509.update_keychain(self.conf.config_dir, self.name)
         except X509Error as e:
-            print str(e)
+            print str(e)'''
 
     def _init_aws(self):
         aws_conf = self.conf.aws_conf
@@ -198,12 +201,15 @@ class Namespace(object):
     #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
         json_dev_str = connection.receive()
+        print json_dev_str
         dev = json.loads(json_dev_str, cls=Device.DECODER)
         ucert_pem = dev.cert_pem
-        x509 = X509.load_certificate_from_keychain(self.conf, self.name)
+        print ">>>>>> "+self.keychain_path
+        x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
         cert_key = x509.get_certificate()
         cert = cert_key[0]
         key  = cert_key[1]
+        print ucert_pem
         dev_x509 = X509.load_certifacate_from_PEM(ucert_pem)
         dev_x509.sign_certificate(cert, key)
         dev.cert_pem = dev_x509.get_PEM_certificate()[0]
@@ -234,14 +240,9 @@ def main():
     conf = Configuration(".safe_config", True)
 
     from OpenSSL import crypto
-    with Namespace(conf, "foo") as ns:
-        #dev0 = Device(10, "iPhone", None, conf=conf)
-        #k = crypto.PKey()
-        #k.generate_key(crypto.TYPE_RSA, 1024)
-        #dev0.join_namespace("wathsala")
+    with Namespace(conf) as ns:
         tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
         ns.add_device(tc)
-        #ns.sync_local_storage()
 
 if __name__ == "__main__":
     main()

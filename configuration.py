@@ -62,18 +62,18 @@ def create_keychain(keychain_path, conf):
 
         pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
-        x509 = X509(conf['dev_conf']['dev_name'], pkey, 
-                    conf['aws_conf'][AWS_USERNAME],
-                    conf['user_conf']['country'], 
-                    conf['user_conf']['state'], 
-                    conf['user_conf']['city'])
+        x509 = X509(conf.dev_conf['dev_name'], pkey, 
+                    conf.aws_conf[AWS_USERNAME],
+                    conf.user_conf['country'], 
+                    conf.user_conf['state'], 
+                    conf.user_conf['city'])
         x509.forge_certificate(False)
         x509.sign_certificate(None)
         rec = x509.get_PEM_certificate()
         cert_pem = rec[0]
         key_pem  = rec[1]
 
-        kc = KeyChain(keychain_path, conf['dev_conf']['dev_name'], kc_passwd)
+        kc = KeyChain(keychain_path, conf.dev_conf['dev_name'], kc_passwd)
         if kc.write_keychain(cert_pem, key_pem) < 0:
             raise X509Error("Certificate exists: "+keychain_name)
 
@@ -104,7 +104,7 @@ class Configuration(object):
         # init 
         keychain_path = path.join(config_dir, KEYCAIN_PATH)
         if not path.exists(keychain_path):
-            create_keychain(keychain_path, self.conf)
+            create_keychain(keychain_path, self)
         self.dev_keychain = KeyChain(keychain_path, self.dev_conf['dev_name'], getpass.getpass("Device Keychain Password: "))
 
 

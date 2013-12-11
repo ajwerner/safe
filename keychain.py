@@ -83,6 +83,20 @@ class KeyChain:
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
+    def update_keychain(self, cert):
+        rec = self.read_keychain()
+        key = rec[1]
+        key_len = len(key)
+        cert_len = len(cert)
+        self.kc_file.seek(0,0)
+        self.kc_file.truncate(0)
+        self.kc_file.write(struct.pack('I', cert_len))
+        self.kc_file.write(struct.pack('I', key_len))
+        self.kc_file.write(cert)
+        self.kc_file.write(key)
+        self.kc_file.flush()
+        return KeyChain.SUCCESS
+
 
     def encrypt_key(self, secret_key):
         '''

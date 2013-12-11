@@ -70,8 +70,8 @@ class X509:
             self.cert.sign(signer_key, 'sha1')
 
     @classmethod
-    def load_certificate_from_keychain(cls, conf, ns_name):
-        kc = KeyChain(conf, ns_name, "1234")
+    def load_certificate_from_keychain(cls, path, ns_name):
+        kc = KeyChain(path, ns_name, "1234")
         rec = kc.read_keychain()
         cert_pem = rec[0]
         key_pem  = rec[1]

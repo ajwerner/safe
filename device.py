@@ -32,6 +32,8 @@ class DeviceEncoder(json.JSONEncoder):
             obj_dict = copy.deepcopy(obj.__dict__)
             if '_conf' in obj_dict:
                 del obj_dict['_conf']
+            if 'keychain' in obj_dict:
+                del obj_dict['keychain']
             return obj_dict
         else:
             return json.JSONEncoder.default(self, obj)
@@ -59,9 +61,13 @@ class Device():
         self.dev_id = dev_id
         self.dev_name = dev_name
         self.app_obj = app_obj
-        self.cert_pem = cert
         self.ns_name = ns_name
         self._conf = conf
+        if conf is not None:
+            self.keychain = conf.dev_keychain
+            self.cert_pem = self.keychain.read_keychain()[0]
+        else:
+            self.cert_pem = cert
         print self._conf
         if ts == -1:
             self.int_ts = time.time()
@@ -79,7 +85,7 @@ class Device():
     def join_namespace(self, ns_name, connection):
     #def join_namespace(self, ns_name):
         #Generate private/public key pair
-        pkey = crypto.PKey()
+        '''pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
         #TODO: Read these values from the configyration file
         country    = "US"
@@ -95,7 +101,7 @@ class Device():
         key_pem  = rec[1]
         self.cert_pem = cert_pem 
         self.ns_name = ns_name
-        keychain_name = str(self.dev_id)+"."+self.ns_name
+        keychain_name = str(self.dev_id)+"."+self.ns_name'''
         #TODO:
         #This method needs a connection as an input to it.
         #We will send the cert_pem to the NS node and get it signed. 
@@ -107,9 +113,7 @@ class Device():
         #...
         #Now write signed_cert_pem and key_pem to the device keychain
         #signed_cert_pem = cert_pem #delete this once we have a connection
-        kc = KeyChain(self._conf, keychain_name, kc_passwd)
-        if kc.write_keychain(signed_cert_pem, key_pem) < 0:
-            raise X509Error("Certificate exists: "+keychain_name)
+        self.keychain.update_keychain(signed_cert_pem)
 
     def sync_local_storage(self):
         if self.ns_name is not None:
