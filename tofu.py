@@ -7,17 +7,20 @@ import hashlib
 from Crypto import Random
 from Crypto.Cipher import AES
 
+#handles padding before encryption and unpadding after decryption
 BS=16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[0:-ord(s[-1])]
 
 class tofu(object):
  
-  flag = 1
-  enc=''
+  #flag = 1
+  #enc=''
 
   def __init__(self, one_time_pad):
       self.one_time_pad = one_time_pad
+      self.flag=1
+      self.enc=''
 
   def messageCB(self, conn, msg):
     msg=str(msg.getBody())
@@ -39,6 +42,8 @@ class tofu(object):
     #BS = 16
     #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
     tojid=receiver
+
+    #padding the message and encrypting it
     text=pad(message)
     key=hashlib.sha256(self.one_time_pad).digest()
     iv = Random.new().read(AES.block_size)
