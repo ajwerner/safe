@@ -17,7 +17,6 @@ __version__     = "0.1"
     |Certificate Length|Private Key Length|Namespace Certificate PEM|Encrypted Private Key PEM|
     +------------------+------------------+-------------------------+-------------------------+
 """
-
 import mmap
 import struct
 import string
@@ -26,7 +25,28 @@ from os import path, stat
 from ctypes import *
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
+from cStringIO import StringIO
+from util import encrypt_with_cert
+from subprocess import Popen, PIPE
+
+def pubkey_from_cert(cert_pem):
+    """ Invokes openssl to extract the public key from the certificate"""
+    ossl = Popen(['openssl','x509','-pubkey','-noout'] , stdout=PIPE, stderr=PIPE, stdin=PIPE)
+    (stdout,_) = ossl.communicate(cert_pem)
+    lines = stdout.strip().split('\n')
+    res = ""
+    if "BEGIN PUBLIC KEY" not in lines[0] or "END PUBLIC KEY" not in lines[-1]:
+        raise AttributeError("Could not extract key from x509 certificate in PEM mode")
+    else:
+        res = stdout
+    return res
+
+def encrypt_with_cert(cert_pem, message):
+    pubkey_pem = pubkey_from_cert(cert_pem)
+    pubkey = RSA.importKey(pubkey_pem)
+    pkcs = PKCS1_OAEP.new(pubkey)
+    return pkcs.encrypt(message)
 
 class KeyChain:
     MASTER_KEY_PAIR = 0
@@ -41,8 +61,7 @@ class KeyChain:
         self.keychain_path = keychain_path
         self.kc_key = PBKDF2(password, name, 32, 5000)
         self.kc_file = open(self.keychain_path, 'a+')
-        st = stat(self.keychain_path)
-
+        stat(self.keychain_path)
 
     def read_keychain(self):
         '''
@@ -62,7 +81,6 @@ class KeyChain:
         _offset += cert_len
         key_pem  = struct.unpack(str(key_len)+'s', kc_mm[_offset:_offset+key_len])[0]
         return cert_pem, key_pem
-
 
     def write_keychain(self, certificate, priv_key):
         '''
@@ -97,7 +115,6 @@ class KeyChain:
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
-
     def encrypt_key(self, secret_key):
         '''
         Encrypt the secret_key with keychain_key using AES.MODE_CBC
@@ -128,6 +145,19 @@ class KeyChain:
         public_key = new_key.publickey().exportKey("DER")
         private_key = new_key.exportKey("DER")
         return public_key, private_key
+
+    def encrypt(self, message):
+        """ pubkey encrypts the message """
+        cert_pem = self.read_keychain()[0]
+        return encrypt_with_cert(cert_pem, message)
+
+    def decrypt(self, message):
+        """ uses the private key to decrypt pubkey encrypted message """
+        privkey_pem = self.read_keychain()[1]
+        privkey = RSA.importKey(privkey_pem)
+        pkcs = PKCS1_OAEP.new(privkey)
+        return pkcs.decrypt(message)
+
 
 
 ''' Test KeyCahin class
