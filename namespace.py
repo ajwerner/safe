@@ -138,7 +138,6 @@ class Namespace(object):
         except DynamoDBKeyNotFoundError as e:
             # Initial remote serialization creation
             self.ns_list = SafeList("", cls=PeerNS)
-            # TODO: add the local device
             self.dev_list = SafeList("", cls=Device)
             self.dev_list.add(self.conf.dev)
             self.state_key = Random.new().read(32)
@@ -146,9 +145,11 @@ class Namespace(object):
             self.metadata = {}
             self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
             self.serialized.put()
+            # rereconcile because we just changed the remote state
             self._reconcile_state()
             return
 
+        # Get the state_key
         keys = json.loads(self.serialized['keys'])
         if str(self.conf.dev.dev_id) not in keys:
             raise KeyError("Local device ID not found in keys")

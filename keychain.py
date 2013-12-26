@@ -31,6 +31,7 @@ from util import encrypt_with_cert
 from subprocess import Popen, PIPE
 
 def pubkey_from_cert(cert_pem):
+    """ Invokes openssl to extract the public key from the certificate"""
     ossl = Popen(['openssl','x509','-pubkey','-noout'] , stdout=PIPE, stderr=PIPE, stdin=PIPE)
     (stdout,_) = ossl.communicate(cert_pem)
     lines = stdout.strip().split('\n')
