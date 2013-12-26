@@ -29,22 +29,32 @@ class SafeList(object):
         """ in place deserialization for the PeerNSList object """
         if not serialization:
             raise ValueError("NoneType serialization given")
-
         new_set = set()
         obj_dict_list = json.loads(serialization)
         if not obj_dict_list:
             return
-        for obj_str in obj_dict_list:
-            if not obj_str:
+        for obj_dict in obj_dict_list:
+            if not obj_dict:
                 continue
-            obj = json.loads(obj_str, cls=self.decoder)
+            obj = json.loads(json.dumps(obj_dict), cls=self.decoder)
             new_set.add(obj)
         self.set = new_set
 
     def add(self, obj):
         if not isinstance(obj, self.cls):
-            raise TypeError("object passed is of wrong type")
+            raise TypeError("Object passed is not of type" % self.cls.__name__)
         self.set.add(obj)
+
+    def remove(self, obj):
+        if not isinstance(obj, self.cls):
+            raise TypeError("Object passed is not of type" % self.cls.__name__)
+        if obj in self.set:
+            self.set.remove(obj)
+        else:
+            raise ValueError("Object passed is not in list")
+
+    def __contains__(self, thing):
+        return thing in self.set
 
     def __repr__(self):
         return self.serialize()

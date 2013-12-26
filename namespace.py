@@ -42,11 +42,15 @@ from boto import iam
 from boto import dynamodb
 from boto.dynamodb.exceptions import DynamoDBKeyNotFoundError
 
+from base64 import b64decode, b64encode
 from safe_list import SafeList
 from device import Device
 from peer_ns import PeerNS
 from X509 import X509, X509Error
 from OpenSSL import crypto
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from Crypto import Random
 
 #Setup logging...
 logging.basicConfig(format='%(levelname)s:%(message)s')
@@ -87,11 +91,27 @@ class Namespace(object):
         self._self_sign()
         self._reconcile_state()
 
+    def _state_encrypt(self, serialization):
+        """returns a base64 encoded AES encrypted copy of serialization"""
+        iv = Random.new().read(AES.block_size)
+        cipher = AES.new(self.state_key, AES.MODE_CFB, iv)
+        msg = iv + cipher.encrypt(serialization)
+        return b64encode(msg)
+
+    def _state_decrypt(self, encrypted):
+        """returns a base64 encoded AES encrypted copy of serialization"""
+        msg = b64decode(encrypted)
+        iv = msg[:AES.block_size]
+        cipher = AES.new(self.state_key, AES.MODE_CFB, iv)
+        return cipher.decrypt(msg[AES.block_size:])
+
     def serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
+        
         return {
-            'ns_list': self.ns_list.serialize(),
-            'dev_list': self.dev_list.serialize(),
+            'keys': json.dumps(self.keys),
+            'ns_list': self._state_encrypt(self.ns_list.serialize()),
+            'dev_list': self._state_encrypt(self.dev_list.serialize()),
             'metadata': json.dumps(self.metadata),
         }
 
@@ -116,22 +136,37 @@ class Namespace(object):
         try:
             self.serialized = namespace_table.get_item(hash_key=self.id)
         except DynamoDBKeyNotFoundError as e:
+            # Initial remote serialization creation
             self.ns_list = SafeList("", cls=PeerNS)
+            # TODO: add the local device
             self.dev_list = SafeList("", cls=Device)
+            self.dev_list.add(self.conf.dev)
+            self.state_key = Random.new().read(32)
+            self.keys = {self.conf.dev.dev_id: b64encode(self.conf.dev_keychain.encrypt(self.state_key))}
             self.metadata = {}
             self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
             self.serialized.put()
+            self._reconcile_state()
             return
 
-        if hasattr(self, 'ns_list'):
-            self.ns_list.update_from_serialization(self.serialized['ns_list'])
-        else:    
-            self.ns_list = SafeList(self.serialized['ns_list'], PeerNS)
-
-        if hasattr(self, 'dev_list'):
-            self.dev_list.update_from_serialization(self.serialized['dev_list'])
+        keys = json.loads(self.serialized['keys'])
+        if str(self.conf.dev.dev_id) not in keys:
+            raise KeyError("Local device ID not found in keys")
         else:
-            self.dev_list = SafeList(self.serialized['dev_list'], Device)
+            key = b64decode(keys[str(self.conf.dev.dev_id)])
+            self.state_key = self.conf.dev_keychain.decrypt(key)
+
+        dec_ns_list = self._state_decrypt(self.serialized['ns_list'])
+        if hasattr(self, 'ns_list'):
+            self.ns_list.update_from_serialization(dec_ns_list)
+        else:    
+            self.ns_list = SafeList(dec_ns_list, PeerNS)
+
+        dec_dev_list = self._state_decrypt(self.serialized['dev_list'])
+        if hasattr(self, 'dev_list'):
+            self.dev_list.update_from_serialization(dec_dev_list)
+        else:
+            self.dev_list = SafeList(dec_dev_list, Device)
 
         self.metadata = json.loads(self.serialized['metadata'])
 
@@ -166,12 +201,6 @@ class Namespace(object):
             self.sync_local_storage()
             self.devl_fd.close()
             self.nsl_fd.close()
-    
-    def get_device_list(self):
-        return json.dumps(list(self.dev_set), cls=Device.ENCODER)
-    
-    def get_peer_ns_list(self):
-        return json.dumps(list(self.ns_set), cls=PeerNS.ENCODER)
 
     def sync_local_storage(self):
         if self.conf.local_only:
@@ -207,16 +236,16 @@ class Namespace(object):
 
     @transaction
     def _remove_device(self, device):
-        self.dev_set.remove(device)
+        self.dev_list.remove(device)
 
     @transaction
     def _add_peer_namespace(self, pns):
-        self.ns_set.add(pns)
+        self.ns_list.add(pns)
         # allow the peer namespace to access the metadata
 
     @transaction
     def _remove_peer_namespace(self, pns):
-        self.ns_set.remove(pns)
+        self.ns_list.remove(pns)
         # disallow the peer namespace from accessing the metadata
 
     @transaction
@@ -224,13 +253,15 @@ class Namespace(object):
         self.metadata = new_metadata
 
 def main():
-    conf = Configuration(".safe_config", True)
+    conf = Configuration()
+    ns = Namespace(conf)
+    print ns.__dict__
 
-    from OpenSSL import crypto
-    with Namespace(conf) as ns:
-        #tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
-        tc = tofu(input_callback)
-        ns.add_device(tc)
+    # from OpenSSL import crypto
+    # with Namespace(conf) as ns:
+    #     #tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
+    #     tc = tofu(input_callback)
+    #     ns.add_device(tc)
 
 if __name__ == "__main__":
     main()

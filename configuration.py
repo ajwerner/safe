@@ -15,14 +15,14 @@ import boto
 import getpass
 import os
 import random
-from OpenSSL        import crypto, SSL
-from X509 import X509, X509Error
-from keychain import KeyChain
-from os import path, makedirs
-from boto import dynamodb2, iam
+from device     import Device
+from OpenSSL    import crypto, SSL
+from X509       import X509, X509Error
+from keychain   import KeyChain
+from os         import path, makedirs
+from boto       import dynamodb2, iam
 
 # Default paths in configuration dir
-
 CONF_PATH       = 'config.json'
 DEV_LIST_PATH   = 'dev_list.json'
 NS_LIST_PATH    = 'ns_list.json'
@@ -40,8 +40,7 @@ def create_config(conf_path):
     user_info = {
             'country': raw_input("Country: ").strip(),
             'state': raw_input("State: ").strip(),
-            'city': raw_input("City: ").strip()
-    }
+            'city': raw_input("City: ").strip() }
     aws_info = {
             AWS_USERNAME: raw_input("AWS Username: ").strip(),
             AWS_ACCESS_KEY: raw_input("AWS Access Key: ").strip(),
@@ -54,7 +53,7 @@ def create_config(conf_path):
     }
     with open(conf_path, 'w') as aws_conf_file:
         json_string = json.dumps(conf)
-        aws_conf_file.write(json_string) 
+        aws_conf_file.write(json_string)
 
 def create_keychain(keychain_path, dev_id ,conf):
         print "Enter information for device certificate"
@@ -106,7 +105,8 @@ class Configuration(object):
         if not path.exists(keychain_path):
             create_keychain(keychain_path, self.dev_conf['dev_name'], self)
         self.dev_keychain = KeyChain(keychain_path, self.dev_conf['dev_name'], getpass.getpass("Device Keychain Password: "))
-
+        self.dev_conf["cert_pem"] = self.dev_keychain.read_keychain()[0]
+        self.dev = Device(**self.dev_conf)
 
 def main():
     """ test client """

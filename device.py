@@ -13,11 +13,12 @@ import json
 import tofu
 import copy
 from os             import path
-from configuration  import Configuration
 from OpenSSL        import crypto, SSL
 from time           import gmtime, mktime
 from X509           import X509, X509Error
-from keychain       import KeyChain
+from keychain       import KeyChain, encrypt_with_cert
+from Crypto.PublicKey import RSA
+from Crypto.Cipher  import PKCS1_OAEP
 
 class DeviceError():
     def __init__(self, value):
@@ -45,9 +46,7 @@ class DeviceDecoder(json.JSONDecoder):
         except ValueError as e:
             raise e
         if dec_dict is not None:
-            return Device(dec_dict['dev_id'], dec_dict['dev_name'], dec_dict['app_obj'], 
-                            conf=None, ts=dec_dict['int_ts'], ns_name=dec_dict['ns_name'], 
-                            cert=dec_dict['cert_pem'])
+            return Device(**dec_dict)
         else:
             return None
 
@@ -55,23 +54,18 @@ class Device():
     DECODER = DeviceDecoder
     ENCODER = DeviceEncoder
 
-    def __init__(self, dev_id, dev_name, app_obj, conf=None, ts=-1, ns_name=None, cert=None):
-        if dev_id < 0 or dev_id > 65535:
-            raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
+    def __init__(self, dev_id=None, dev_name=None, app_obj=None, int_ts=-1, ns_name=None, cert_pem=None):
         self.dev_id = dev_id
+        if self.dev_id < 0 or self.dev_id > 65535:
+            raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
         self.dev_name = dev_name
         self.app_obj = app_obj
         self.ns_name = ns_name
-        self._conf = conf
-        if conf is not None:
-            self.keychain = conf.dev_keychain
-            self.cert_pem = self.keychain.read_keychain()[0]
-        else:
-            self.cert_pem = cert
-        if ts == -1:
+        if int_ts == -1:
             self.int_ts = time.time()
         else:
-            self.int_ts = ts
+            self.int_ts = int_ts
+        self.cert_pem = cert_pem
 
     @classmethod
     def load_device(cls, conf):
@@ -79,7 +73,6 @@ class Device():
             dev = json.load(json_in, cls=DeviceDecoder)
             return cls(dev.dev_id, dev.dev_name, dev.app_obj, 
                     conf, dev.int_ts, dev.ns_name, dev.cert_pem)
-
 
     def join_namespace(self, ns_name, connection):
         dev_json_str = json.dumps(self, cls=Device.ENCODER)
@@ -105,7 +98,8 @@ class Device():
         if self.dev_id < other.dev_id:
             return -1
         elif self.dev_id == other.dev_id:
-                return 0
+            # This was put so that we can compare devices by their certificates, it may be a bug
+            return cmp(self.cert_pem, other.cert_pem)
         else:
             return 1
 
@@ -122,7 +116,7 @@ try:
     dev.sync_local_storage()
     json_dev = json.dumps(dev, cls=DeviceEncoder)
     #print json_dev
-    dev2 = json.loads(json_dev, cls=DeviceDecoder)
+    dev2 = json.loads(json_dev, cls=DeviceDecoder)a
     print dev2
     dev3 = Device.load_device()
     print dev3
