@@ -187,7 +187,6 @@ class Namespace(object):
         self.dev_list.add(device)
 
     def add_device(self, connection):
-    #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
         json_dev_str = connection.receive()
         dev = json.loads(json_dev_str, cls=Device.DECODER)
@@ -207,7 +206,7 @@ class Namespace(object):
 
     @transaction
     def _remove_device(self, device):
-        self.dev_set.remove(device)
+        self.dev_list.remove(device)
 
     @transaction
     def _add_peer_namespace(self, pns):
@@ -219,16 +218,34 @@ class Namespace(object):
         self.ns_set.remove(pns)
         # disallow the peer namespace from accessing the metadata
 
+    def add_peer_namespace(self, connection):
+        #read namespace certificate form the connection
+        json_pns_str = connection.receive()
+        pns = json.loads(json_pns_str, cls=PeerNS.DECODER)
+        ns_self_json = json.dumps(get_peer_namespace(), cls=PeerNS.ENCODER)
+        connection.send(ns_self_json)
+        self._add_peer_namespace(pns)
+
+    def join_peer_namespace():
+
+
+
     @transaction
     def update_metadata(self, new_metadata):
         self.metadata = new_metadata
+
+    def get_peer_namspace():
+        x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
+        cert_key = x509.get_certificate()
+        cert = cert_key[0]
+        self_ns = PeerNS(0, self.ns_name, cert) 
+        return self_ns
 
 def main():
     conf = Configuration(".safe_config", True)
 
     from OpenSSL import crypto
     with Namespace(conf) as ns:
-        #tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
         tc = tofu(input_callback)
         ns.add_device(tc)
 
