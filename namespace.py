@@ -260,14 +260,6 @@ class Namespace(object):
         return self_ns
 
 def main():
-<<<<<<< HEAD
-    conf = Configuration(".safe_config", True)
-
-    from OpenSSL import crypto
-    with Namespace(conf) as ns:
-        tc = tofu(input_callback)
-        ns.add_device(tc)
-=======
     conf = Configuration()
     ns = Namespace(conf)
     print ns.__dict__
@@ -277,7 +269,6 @@ def main():
     #     #tc = tofu("123456", "safe_device1@is-a-furry.org", "safepassword", "safe_device2@is-a-furry.org")
     #     tc = tofu(input_callback)
     #     ns.add_device(tc)
->>>>>>> a0d12bd0e5a4f5c259fc1d31ffe208d967b745c3
 
 if __name__ == "__main__":
     main()
