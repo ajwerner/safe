@@ -24,8 +24,8 @@ def input_callback():
   j_id = raw_input("User ID: ")#+"@is-a-furry.org"
   j_pwd = getpass.getpass("Password: ")
   rcpt = raw_input("To: ")#+"@is-a-furry.org"
-  otp = raw_input("Enter One-Time-Pad: ")
-  return {'j_id':j_id, 'j_pwd':j_pwd, 'rcpt':rcpt, 'otp':otp}
+  nonce = raw_input("Enter Nonce: ")
+  return {'j_id':j_id, 'j_pwd':j_pwd, 'rcpt':rcpt, 'nonce':nonce}
 
 class tofu(object):
  
@@ -35,7 +35,7 @@ class tofu(object):
 #  def __init__(self, one_time_pad, j_id, j_pwd, receiver):
   def __init__(self, f):
       rec = f()
-      self.one_time_pad = rec['otp']
+      self.one_time_pad = rec['nonce']
       self.j_id= rec['j_id']
       self.j_pwd= rec['j_pwd']
       self.receiver= rec['rcpt']

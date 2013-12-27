@@ -34,19 +34,18 @@ class PeerNSError():
 class PeerNSEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, PeerNS):
-            return json.dumps(obj.__dict__)
+            return obj.__dict__
         else:
             return json.JSONEncoder.default(self, obj)
 
 class PeerNSDecoder(json.JSONDecoder):
     def decode(self, json_str):
         try:
-            dec_str = json.loads(json_str)
+            dec_dict = json.loads(str(json_str))
         except ValueError as e:
             raise e
-        if dec_str:
-            return PeerNS(dec_str['ns_id'], dec_str['ns_name'],
-                        dec_str['pub_key'], dec_str['ctime'])
+        if dec_dict is not None:
+            return PeerNS(**dec_dict)
         else:
             return None
 
@@ -54,14 +53,14 @@ class PeerNS:
     ENCODER = PeerNSEncoder
     DECODER = PeerNSDecoder
 
-    def __init__(self, ns_id, ns_name, pub_key, ts=-1):
+    def __init__(self, ns_id, ns_name, pub_key, ctime=-1):
         if not isinstance(ns_id, int):
             raise PeerNSError("Bad Namespace ID (ns_id="+str(ns_id)+")")
         self.ns_id = ns_id
         self.ns_name = ns_name
         self.pub_key = pub_key
-        if ts > -1:
-            self.ctime = ts
+        if ctime > -1:
+            self.ctime = ctime
         else:
             self.ctime = time.time()
 

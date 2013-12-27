@@ -210,6 +210,7 @@ class Namespace(object):
             self.devl_fd.write(dev_list_json)
             self.nsl_fd.truncate(0)
             ns_list_json = self.ns_list.serialize()
+            print ns_list_json
             self.nsl_fd.write(ns_list_json)
 
     @transaction
@@ -239,22 +240,20 @@ class Namespace(object):
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
         peer_ns_cert_pem = peer_ns.pub_key
-        print peer_ns_cert_pem
         self._add_peer_namespace(peer_ns)
-        cert_key = x509.get_certificate()
-        cert = cert_key[0]
-        connection.send(cert)
+        ns = self.get_peer_namespace()
+        ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
+        connection.send(ns_json)
 
     def join_peer_namespace(self, connection):
         #send a PeerNS instance of this namespace to the 
         #other namespace...
-        ns = get_peer_namespace()
-        ns_json = json.dumps(peer_ns, cls=PeerNS.ENCODER)
+        ns = self.get_peer_namespace()
+        ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
         peer_ns_cert_pem = peer_ns.pub_key
-        print peer_ns_cert_pem
         self._add_peer_namespace(peer_ns)
 
     @transaction
@@ -275,17 +274,22 @@ class Namespace(object):
     def update_metadata(self, new_metadata):
         self.metadata = new_metadata
 
-    def get_peer_namspace():
+    def get_peer_namespace(self):
         x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
-        cert_key = x509.get_certificate()
+        cert_key = x509.get_PEM_certificate()
         cert = cert_key[0]
-        self_ns = PeerNS(0, self.ns_name, cert) 
+        print cert
+        self_ns = PeerNS(0, self.name, cert) 
         return self_ns
 
 def main():
     conf = Configuration()
     ns = Namespace(conf)
     print ns.__dict__
+
+    #tc = tofu(input_callback)
+    #ns.add_peer_namespace(tc)
+    #ns.sync_local_storage()
 
     # from OpenSSL import crypto
     # with Namespace(conf) as ns:
@@ -296,16 +300,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-'''Test Namespace
-
-from OpenSSL import crypto
-
-with Namespace("wathsala", "/tmp/dev_list", "/tmp/ns_list") as ns:
-    dev0 = Device(10, "iPhone", None)
-    k = crypto.PKey()
-    k.generate_key(crypto.TYPE_RSA, 1024)
-    dev0.join_namespace("wathsala")
-    ns.add_device(dev0)
-
-    ns.sync_local_storage()
-'''
