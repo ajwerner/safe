@@ -217,7 +217,6 @@ class Namespace(object):
         self.dev_list.add(device)
 
     def add_device(self, connection):
-    #def add_device(self, dev): #Remove dev when switching to above prototype
         #read the device out from the connection...
         json_dev_str = connection.receive()
         dev = json.loads(json_dev_str, cls=Device.DECODER)
@@ -234,6 +233,29 @@ class Namespace(object):
         #write the signed certificate dev.cert_pem back to connection 
         connection.send(dev.cert_pem)
         print dev.cert_pem
+
+    def add_peer_namespace(self, connection):
+        #read the device out from the connection...
+        peer_ns_json = connection.receive()
+        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
+        peer_ns_cert_pem = peer_ns.pub_key
+        print peer_ns_cert_pem
+        self._add_peer_namespace(peer_ns)
+        cert_key = x509.get_certificate()
+        cert = cert_key[0]
+        connection.send(cert)
+
+    def join_peer_namespace(self, connection):
+        #send a PeerNS instance of this namespace to the 
+        #other namespace...
+        ns = get_peer_namespace()
+        ns_json = json.dumps(peer_ns, cls=PeerNS.ENCODER)
+        connection.send(ns_json)
+        peer_ns_json = connection.receive()
+        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
+        peer_ns_cert_pem = peer_ns.pub_key
+        print peer_ns_cert_pem
+        self._add_peer_namespace(peer_ns)
 
     @transaction
     def _remove_device(self, device):
@@ -252,6 +274,13 @@ class Namespace(object):
     @transaction
     def update_metadata(self, new_metadata):
         self.metadata = new_metadata
+
+    def get_peer_namspace():
+        x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
+        cert_key = x509.get_certificate()
+        cert = cert_key[0]
+        self_ns = PeerNS(0, self.ns_name, cert) 
+        return self_ns
 
 def main():
     conf = Configuration()

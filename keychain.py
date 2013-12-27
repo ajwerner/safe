@@ -118,8 +118,6 @@ class KeyChain:
         '''
         Encrypt the secret_key with keychain_key using AES.MODE_CBC
         with an initialization vector...
-        We do not need padding as we always deal with a string that 
-        always will have a length of multiple of 16, 24, 32.
         '''
 
         #TODO: Implement encryption correctly...
