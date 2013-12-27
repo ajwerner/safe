@@ -234,6 +234,29 @@ class Namespace(object):
         connection.send(dev.cert_pem)
         print dev.cert_pem
 
+    def add_peer_namespace(self, connection):
+        #read the device out from the connection...
+        peer_ns_json = connection.receive()
+        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
+        peer_ns_cert_pem = peer_ns.pub_key
+        print peer_ns_cert_pem
+        self._add_peer_namespace(peer_ns)
+        cert_key = x509.get_certificate()
+        cert = cert_key[0]
+        connection.send(cert)
+
+    def join_peer_namespace(self, connection):
+        #send a PeerNS instance of this namespace to the 
+        #other namespace...
+        ns = get_peer_namespace()
+        ns_json = json.dumps(peer_ns, cls=PeerNS.ENCODER)
+        connection.send(ns_json)
+        peer_ns_json = connection.receive()
+        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
+        peer_ns_cert_pem = peer_ns.pub_key
+        print peer_ns_cert_pem
+        self._add_peer_namespace(peer_ns)
+
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
