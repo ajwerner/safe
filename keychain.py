@@ -27,7 +27,6 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
 from cStringIO import StringIO
-from util import encrypt_with_cert
 from subprocess import Popen, PIPE
 
 def pubkey_from_cert(cert_pem):
