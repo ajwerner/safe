@@ -53,6 +53,9 @@ class SafeList(object):
         else:
             raise ValueError("Object passed is not in list")
 
+    def get_list(self):
+        return list(self.set)
+
     def __contains__(self, thing):
         return thing in self.set
 

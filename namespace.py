@@ -282,8 +282,36 @@ class Namespace(object):
         self_ns = PeerNS(0, self.name, cert) 
         return self_ns
 
+def validate_cert(cacert_pem, cert_pem): 
+    from OpenSSL import crypto, SSL
+    from Crypto.Util import asn1
+
+    cacert = X509.load_certifacate_from_PEM(cacert_pem).get_certificate()[0]
+    cert = X509.load_certifacate_from_PEM(cert_pem).get_certificate()[0]
+    sig_algo = cert.get_signature_algorithm()
+
+    # Get the ASN1 format of the certificate
+    ASN1_cert = crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
+    # Decode the certificate
+    der_seq=asn1.DerSequence()
+    der_seq.decode(ASN1_cert)
+    der_cert = der_seq[0]
+    der_algo = der_seq[1]
+    der_sig = asn1.DerObject()
+    der_sig.decode(der_seq[2])
+    cert_sig_payload = der_sig.payload
+    if cert_sig_payload[0]!='\x00':
+        raise Exception('Unused bits found!')
+    cert_sig = cert_sig_payload[1:]
+    # Verify cert with cacert
+    try:
+        crypto.verify(cacert, cert_sig, der_cert,sig_algo)
+        print "Certificate looks good"
+    except crypto.Error, e:
+        print "Sorry. Nope."
+
 def main():
-    conf = Configuration()
+    conf = Configuration(local_only=False)
     ns = Namespace(conf)
     print ns.__dict__
 

@@ -15,6 +15,7 @@ Saves certificates and privates keys to keychain in PEM format.
 """
 
 from OpenSSL import crypto, SSL
+from Crypto.Util import asn1
 from time import gmtime, mktime
 import os
 import struct
@@ -103,6 +104,34 @@ class X509:
             key_pem = None
         return cert_pem, key_pem
 
+    def validate_cert(self, cacert_pem): 
+        # Create an X509 object for cacert_pem (CA Certificate).
+        cacert = X509.load_certifacate_from_PEM(cacert_pem).get_certificate()[0]
+        # Get the X509 object of this certifcate.
+        cert = self.get_certificate()[0]
+        sig_algo = cert.get_signature_algorithm()
+
+        # Let's start with the ASN1 format of this certificate
+        ASN1_cert = crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
+        # We need everything in DER format
+        der_seq=asn1.DerSequence()
+        der_seq.decode(ASN1_cert)
+        der_cert = der_seq[0]
+        der_algo = der_seq[1]
+        der_sig = asn1.DerObject()
+        der_sig.decode(der_seq[2])
+        cert_sig_payload = der_sig.payload
+        if cert_sig_payload[0]!='\x00':
+            raise Exception('Unused bits found!')
+        cert_sig = cert_sig_payload[1:]
+        # Verify this cert with cacert
+        try:
+            crypto.verify(cacert, cert_sig, der_cert,sig_algo)
+            print "Certifcate Valid!"
+            return True
+        except crypto.Error as e:
+            print "Certrifcate Invalid: \n"+str(e)
+            return False
 
 '''Test X509 class
 #Self sign the namespace keys
