@@ -36,7 +36,7 @@ import logging
 import copy
 from tofu import *
 
-from configuration import Configuration, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY, create_keychain
+from configuration import Configuration, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
 
 from boto import iam
 from boto import dynamodb
@@ -47,6 +47,7 @@ from safe_list import SafeList
 from device import Device
 from peer_ns import PeerNS
 from X509 import X509, X509Error
+from keychain import encrypt_with_cert
 from OpenSSL import crypto
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -88,7 +89,6 @@ class Namespace(object):
             self._init_local()
         else:
             self._init_aws()
-        self._self_sign()
         self._reconcile_state()
 
     def _state_encrypt(self, serialization):
@@ -107,18 +107,14 @@ class Namespace(object):
 
     def serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
-        
         return {
+            'privkey_pem': self._state_encrypt(self.privkey_pem),
+            'cert_pem': self._state_encrypt(self.cert_pem),
             'keys': json.dumps(self.keys),
             'ns_list': self._state_encrypt(self.ns_list.serialize()),
             'dev_list': self._state_encrypt(self.dev_list.serialize()),
             'metadata': json.dumps(self.metadata),
         }
-
-    def _self_sign(self):
-        self.keychain_path = os.path.join(self.conf.config_dir, self.conf.aws_conf['aws_username']+".kc")
-        if not os.path.exists(self.keychain_path):
-            create_keychain(self.keychain_path, None, self.conf)
 
     def _init_aws(self):
         aws_conf = self.conf.aws_conf
@@ -142,6 +138,21 @@ class Namespace(object):
             self.dev_list.add(self.conf.dev)
             self.state_key = Random.new().read(32)
             self.keys = {self.conf.dev.dev_id: b64encode(self.conf.dev_keychain.encrypt(self.state_key))}
+
+            # make a new keypair for the namespace
+            pkey = crypto.PKey()
+            pkey.generate_key(crypto.TYPE_RSA, 1024)
+            x509 = X509(self.id, pkey, 
+                    self.conf.aws_conf[AWS_USERNAME],
+                    self.conf.user_conf['country'], 
+                    self.conf.user_conf['state'], 
+                    self.conf.user_conf['city'])
+            x509.forge_certificate(False)
+            x509.sign_certificate(None)
+            rec = x509.get_PEM_certificate()
+            self.cert_pem = rec[0]
+            self.privkey_pem  = rec[1]
+
             self.metadata = {}
             self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
             self.serialized.put()
@@ -150,17 +161,20 @@ class Namespace(object):
             return
 
         # Get the state_key
-        keys = json.loads(self.serialized['keys'])
-        if str(self.conf.dev.dev_id) not in keys:
+        self.keys = json.loads(self.serialized['keys'])
+        if str(self.conf.dev.dev_id) not in self.keys:
             raise KeyError("Local device ID not found in keys")
         else:
-            key = b64decode(keys[str(self.conf.dev.dev_id)])
+            key = b64decode(self.keys[str(self.conf.dev.dev_id)])
             self.state_key = self.conf.dev_keychain.decrypt(key)
+
+        self.cert_pem = self._state_decrypt(self.serialized['cert_pem'])
+        self.privkey_pem = self._state_decrypt(self.serialized['privkey_pem'])
 
         dec_ns_list = self._state_decrypt(self.serialized['ns_list'])
         if hasattr(self, 'ns_list'):
             self.ns_list.update_from_serialization(dec_ns_list)
-        else:    
+        else:  
             self.ns_list = SafeList(dec_ns_list, PeerNS)
 
         dec_dev_list = self._state_decrypt(self.serialized['dev_list'])
@@ -213,22 +227,29 @@ class Namespace(object):
             print ns_list_json
             self.nsl_fd.write(ns_list_json)
 
+    @classmethod
+    def join(cls, conf, tofu):
+        dev_json_str = json.dumps(conf.dev, cls=Device.ENCODER)
+        tofu.send(dev_json_str)
+        signed_cert_pem = tofu.receive()
+        conf.dev.cert_pem = signed_cert_pem
+        conf.dev_keychain.update_keychain(signed_cert_pem)
+        ns = cls(conf)
+        return ns
+
     @transaction
     def _add_device(self, device):
         self.dev_list.add(device)
+        self.keys[device.dev_id] = b64encode(encrypt_with_cert(device.cert_pem, self.state_key))
 
     def add_device(self, connection):
         #read the device out from the connection...
         json_dev_str = connection.receive()
         dev = json.loads(json_dev_str, cls=Device.DECODER)
-        ucert_pem = dev.cert_pem
-        x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
-        cert_key = x509.get_certificate()
-        cert = cert_key[0]
-        key  = cert_key[1]
-        print ucert_pem
-        dev_x509 = X509.load_certifacate_from_PEM(ucert_pem)
-        dev_x509.sign_certificate(cert, key)
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
+        privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
+        dev_x509 = X509.load_certifacate_from_PEM(dev.cert_pem)
+        dev_x509.sign_certificate(cert, privkey)
         dev.cert_pem = dev_x509.get_PEM_certificate()[0]
         self._add_device(dev)
         #write the signed certificate dev.cert_pem back to connection 
@@ -259,6 +280,7 @@ class Namespace(object):
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
+        del self.keys[device.dev_id]
 
     @transaction
     def _add_peer_namespace(self, pns):
@@ -313,11 +335,9 @@ def validate_cert(cacert_pem, cert_pem):
 def main():
     conf = Configuration(local_only=False)
     ns = Namespace(conf)
-    print ns.__dict__
 
-    #tc = tofu(input_callback)
-    #ns.add_peer_namespace(tc)
-    #ns.sync_local_storage()
+    tc = tofu(input_callback)
+    ns.add_device(tc)
 
     # from OpenSSL import crypto
     # with Namespace(conf) as ns:

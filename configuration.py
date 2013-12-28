@@ -55,10 +55,7 @@ def create_config(conf_path):
         json_string = json.dumps(conf)
         aws_conf_file.write(json_string)
 
-def create_keychain(keychain_path, dev_id ,conf):
-        print "Enter information for device certificate"
-        kc_passwd = getpass.getpass("Device Keychain Password: ")
-
+def create_device_keychain(keychain_path, dev_id, conf, kc_passwd):
         pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
         x509 = X509(dev_id, pkey, 
@@ -75,6 +72,7 @@ def create_keychain(keychain_path, dev_id ,conf):
         kc = KeyChain(keychain_path, conf.dev_conf['dev_name'], kc_passwd)
         if kc.write_keychain(cert_pem, key_pem) < 0:
             raise X509Error("Certificate exists: "+keychain_path)
+        return kc
 
 class Configuration(object):
     REGION = 'us-east-1'
@@ -102,9 +100,11 @@ class Configuration(object):
 
         # init 
         keychain_path = path.join(config_dir, KEYCHAIN_PATH)
+        kc_password = getpass.getpass("Device Keychain Password: ")
         if not path.exists(keychain_path):
-            create_keychain(keychain_path, self.dev_conf['dev_name'], self)
-        self.dev_keychain = KeyChain(keychain_path, self.dev_conf['dev_name'], getpass.getpass("Device Keychain Password: "))
+            self.dev_keychain = create_device_keychain(keychain_path, self.dev_conf['dev_name'], self, kc_password)
+        else:
+            self.dev_keychain = KeyChain(keychain_path, self.dev_conf['dev_name'], kc_password)
         self.dev_conf["cert_pem"] = self.dev_keychain.read_keychain()[0]
         self.dev = Device(**self.dev_conf)
 

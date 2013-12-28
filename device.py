@@ -16,7 +16,7 @@ from os             import path
 from OpenSSL        import crypto, SSL
 from time           import gmtime, mktime
 from X509           import X509, X509Error
-from keychain       import KeyChain, encrypt_with_cert
+from keychain       import KeyChain
 from Crypto.PublicKey import RSA
 from Crypto.Cipher  import PKCS1_OAEP
 
@@ -78,8 +78,7 @@ class Device():
         dev_json_str = json.dumps(self, cls=Device.ENCODER)
         connection.send(dev_json_str)
         signed_cert_pem = connection.receive()
-        print signed_cert_pem
-        self.keychain.update_keychain(signed_cert_pem)
+        self.cert_pem = signed_cert_pem
 
     def sync_local_storage(self):
         if self.ns_name is not None:
