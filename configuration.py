@@ -77,7 +77,7 @@ def create_device_keychain(keychain_path, dev_id, conf, kc_passwd):
 class Configuration(object):
     REGION = 'us-east-1'
 
-    def __init__(self, config_dir="~/.safe_config", local_only=False):
+    def __init__(self, config_dir=".safe_config", local_only=False):
         self.local_only = local_only
         self.config_dir = path.abspath(config_dir)
         if not path.exists(config_dir):
