@@ -78,6 +78,17 @@ class PeerNS:
         else:
             return 1
 
+    def get_metadata(self, ns):
+        namespace_table = ns.dynamo.get_table('namespaces')
+        serialized = namespace_table.get_item(hash_key=self.ns_id)
+        metadata_keys = json.loads(self.serialized['metadata_keys'])
+        if ns.id != metadata_keys:
+            raise PeerNSError("Namespace not authorized to access peer namespace")
+        metadata_key_enc = b64decode(self.metadata_keys[self.id])
+        metadata_key = decrypt_with_privkey(ns.privkey_pem , metadata_key_enc)
+        return AES_decrypt(serialized['metadata'], metadata_key)
+
+
 
 '''Test PeerNS class
 try:
