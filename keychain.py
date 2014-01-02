@@ -21,8 +21,10 @@ import mmap
 import struct
 import string
 import traceback
+from base64 import b64encode, b64decode
 from os import path, stat
 from ctypes import *
+from Crypto import Random
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
@@ -46,6 +48,25 @@ def encrypt_with_cert(cert_pem, message):
     pubkey = RSA.importKey(pubkey_pem)
     pkcs = PKCS1_OAEP.new(pubkey)
     return pkcs.encrypt(message)
+
+def decrypt_with_privkey(privkey_pem, message):
+    privkey = RSA.importKey(privkey_pem)
+    pkcs = PKCS1_OAEP.new(privkey)
+    return pkcs.decrypt(message)
+
+def AES_encrypt(serialization, key):
+    """returns a base64 encoded AES encrypted copy of serialization"""
+    iv = Random.new().read(AES.block_size)
+    cipher = AES.new(key, AES.MODE_CFB, iv)
+    msg = iv + cipher.encrypt(serialization)
+    return b64encode(msg)
+
+def AES_decrypt(encrypted, key):
+    """returns a base64 encoded AES encrypted copy of serialization"""
+    msg = b64decode(encrypted)
+    iv = msg[:AES.block_size]
+    cipher = AES.new(key, AES.MODE_CFB, iv)
+    return cipher.decrypt(msg[AES.block_size:])
 
 class KeyChain:
     MASTER_KEY_PAIR = 0
@@ -151,9 +172,7 @@ class KeyChain:
     def decrypt(self, message):
         """ uses the private key to decrypt pubkey encrypted message """
         privkey_pem = self.read_keychain()[1]
-        privkey = RSA.importKey(privkey_pem)
-        pkcs = PKCS1_OAEP.new(privkey)
-        return pkcs.decrypt(message)
+        return decrypt_with_privkey(privkey_pem, message)
 
 
 

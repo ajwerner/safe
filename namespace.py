@@ -47,7 +47,7 @@ from safe_list import SafeList
 from device import Device
 from peer_ns import PeerNS
 from X509 import X509, X509Error
-from keychain import encrypt_with_cert
+from keychain import encrypt_with_cert, decrypt_with_privkey, AES_decrypt, AES_encrypt
 from OpenSSL import crypto
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -91,29 +91,16 @@ class Namespace(object):
             self._init_aws()
         self._reconcile_state()
 
-    def _state_encrypt(self, serialization):
-        """returns a base64 encoded AES encrypted copy of serialization"""
-        iv = Random.new().read(AES.block_size)
-        cipher = AES.new(self.state_key, AES.MODE_CFB, iv)
-        msg = iv + cipher.encrypt(serialization)
-        return b64encode(msg)
-
-    def _state_decrypt(self, encrypted):
-        """returns a base64 encoded AES encrypted copy of serialization"""
-        msg = b64decode(encrypted)
-        iv = msg[:AES.block_size]
-        cipher = AES.new(self.state_key, AES.MODE_CFB, iv)
-        return cipher.decrypt(msg[AES.block_size:])
-
     def serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
         return {
-            'privkey_pem': self._state_encrypt(self.privkey_pem),
-            'cert_pem': self._state_encrypt(self.cert_pem),
-            'keys': json.dumps(self.keys),
-            'ns_list': self._state_encrypt(self.ns_list.serialize()),
-            'dev_list': self._state_encrypt(self.dev_list.serialize()),
-            'metadata': json.dumps(self.metadata),
+            'privkey_pem': AES_encrypt(self.privkey_pem, self.state_key),
+            'cert_pem': AES_encrypt(self.cert_pem, self.state_key),
+            'state_keys': json.dumps(self.state_keys),
+            'ns_list': AES_encrypt(self.ns_list.serialize(), self.state_key),
+            'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
+            'metadata_keys': json.dumps(self.metadata_keys),
+            'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
         }
 
     def _init_aws(self):
@@ -137,7 +124,7 @@ class Namespace(object):
             self.dev_list = SafeList("", cls=Device)
             self.dev_list.add(self.conf.dev)
             self.state_key = Random.new().read(32)
-            self.keys = {self.conf.dev.dev_id: b64encode(self.conf.dev_keychain.encrypt(self.state_key))}
+            self.state_keys = {self.conf.dev.dev_id: b64encode(self.conf.dev_keychain.encrypt(self.state_key))}
 
             # make a new keypair for the namespace
             pkey = crypto.PKey()
@@ -153,7 +140,9 @@ class Namespace(object):
             self.cert_pem = rec[0]
             self.privkey_pem  = rec[1]
 
-            self.metadata = {}
+            self.metadata = {'cert_pem': self.cert_pem, 'name': self.name}
+            self.metadata_key = Random.new().read(32)
+            self.metadata_keys = {self.id: b64encode(encrypt_with_cert(self.cert_pem, self.metadata_key))}
             self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
             self.serialized.put()
             # rereconcile because we just changed the remote state
@@ -161,29 +150,40 @@ class Namespace(object):
             return
 
         # Get the state_key
-        self.keys = json.loads(self.serialized['keys'])
-        if str(self.conf.dev.dev_id) not in self.keys:
+        self.state_keys = json.loads(self.serialized['state_keys'])
+        if str(self.conf.dev.dev_id) not in self.state_keys:
             raise KeyError("Local device ID not found in keys")
         else:
-            key = b64decode(self.keys[str(self.conf.dev.dev_id)])
-            self.state_key = self.conf.dev_keychain.decrypt(key)
+            state_key = b64decode(self.state_keys[str(self.conf.dev.dev_id)])
+            self.state_key = self.conf.dev_keychain.decrypt(state_key)
 
-        self.cert_pem = self._state_decrypt(self.serialized['cert_pem'])
-        self.privkey_pem = self._state_decrypt(self.serialized['privkey_pem'])
+        # Get the namespace keys
+        self.cert_pem = AES_decrypt(self.serialized['cert_pem'], self.state_key)
+        self.privkey_pem = AES_decrypt(self.serialized['privkey_pem'], self.state_key)
 
-        dec_ns_list = self._state_decrypt(self.serialized['ns_list'])
+        # Get the peer ns list
+        dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)
         if hasattr(self, 'ns_list'):
             self.ns_list.update_from_serialization(dec_ns_list)
         else:  
             self.ns_list = SafeList(dec_ns_list, PeerNS)
 
-        dec_dev_list = self._state_decrypt(self.serialized['dev_list'])
+        # Get the device list
+        dec_dev_list = AES_decrypt(self.serialized['dev_list'], self.state_key)
         if hasattr(self, 'dev_list'):
             self.dev_list.update_from_serialization(dec_dev_list)
         else:
             self.dev_list = SafeList(dec_dev_list, Device)
 
-        self.metadata = json.loads(self.serialized['metadata'])
+        # get the metadata
+        self.metadata_keys = json.loads(self.serialized['metadata_keys'])
+        if self.id not in self.metadata_keys:
+            raise KeyError("Namespace does not have access to its own metadata!")
+        else:
+            metadata_key = b64decode(self.metadata_keys[self.id])
+            self.metadata_key = decrypt_with_privkey(self.privkey_pem, metadata_key)
+
+        self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
 
     def _init_local(self):
         self.devl_fd = open(self.conf.dev_list_path, "a+")
@@ -284,12 +284,14 @@ class Namespace(object):
 
     @transaction
     def _add_peer_namespace(self, pns):
+        self.metadata_keys[psn.ns_id] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
         self.ns_list.add(pns)
         # allow the peer namespace to access the metadata
 
     @transaction
     def _remove_peer_namespace(self, pns):
         self.ns_list.remove(pns)
+        del self.metadata_keys[pns.ns_id]
         # disallow the peer namespace from accessing the metadata
 
     @transaction
