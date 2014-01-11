@@ -73,7 +73,6 @@ def verify_signature(cert_pem, message, sig):
     return verifier.verify(h, b64decode(sig))
 
 def AES_encrypt(serialization, key):
-    print b64encode(key)
     """returns a base64 encoded AES encrypted copy of serialization"""
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(key, AES.MODE_CFB, iv)
@@ -81,7 +80,6 @@ def AES_encrypt(serialization, key):
     return b64encode(msg)
 
 def AES_decrypt(encrypted, key):
-    print b64encode(key)
     """returns a base64 encoded AES encrypted copy of serialization"""
     msg = b64decode(encrypted)
     iv = msg[:AES.block_size]
