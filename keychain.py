@@ -201,7 +201,7 @@ class KeyChain:
         privkey_pem = self.read_keychain()[1]
         return decrypt_with_privkey(privkey_pem, message)
 
-''' Test KeyCahin class'''
+''' Test KeyCahin class
 kc = KeyChain("/tmp/test.kc", "wathsala", "1234")
 priv_key = "1kAFRoFPN41VfpItASjNN3gjLe0YhHonysH22A1VVzb8J+ZtMU7OfO7NEswtcF3DLG+6oeG9sLbgyzC45s/QO3vdmQSGnnYbiIR3xD+lgTE4uoeMz54n6YCJEhO+o5Vb49jl/p9YO5MQx6ghOAMVXuqkoAcZFFqsGAguMCirkrDmjEqjbR/ntoxEv7tbe8gr70C1uwV/PWiyinAhIgXVaNKI6G41HTeBDRSIXeMmpumUPyZDXhxgsF1zQWlXiCF+fYal8KlIQ3qx+Jc7MD4cMjFXcjaAw5wIxnjR6Tc2cIHtuSxBi4ZghwVc1/Caas5p1vSDGQOOTZUT5DLQhwMt0Q+qt+RoqYeTgSRuU2Xh5yKZOXZ/ag69wTKJhzDmEy6YxL+2Nfi5JpXX3iGECahwbmf8ZANV1rH/AtrHQ9CbAx0a0SIwL9WZbOCtUHwlXRV271NscUnHbJAw8QICpqPwZ8AzvESqjFz/3g2YYV7+L8rVz6EMRqPJ7ceVSCqu0L3Ap+f5wTG07R7XIEKCoKBcaKuAboE+Cr3Ypw2rGt7Fep2CDBfyd1Q8fvjkM6C8tO7SAmMwpLuyv0Qanx31DNzhOA1u8ffqPXEfDBVGpyAB9SBYmNOYVChGJcROpdwzwdjKIzqj0HtIW7EaCRgClCBE0tsLo8tFuSSxIoFtsO/E3ypw5MI2zI89vfsSuMbbrQDXKE48+onaUrnTzXvmLZEo7NqWQ/dFPPQ1+B9NMyCnr+FXe58tWgjzn+z1feskG2Zp7FlltI2BQViCeqio++L7smZtQ8AOiCqcF1Awqkw8w/SU58oQwaPo6Kc9PkqWGZw2smOPfCq6PpE8HVe3IWLCVKe3sfZHdjCSUzCeOkzmf0R/WoyW5a8iObwTQtVezho9LC87LzmXXJw4qU51evhiZQC6BSWxfC2IRRHRKOlcBxJhSvkL1AX+6SGzjNTv9DZjZfMv7A2LWaDnuW+Dov+xtGMLujtNnCuN59pUEZUp1pdkrU2T7afJi2fxnobQPBpX7qy5w94EAIOV5yJkAGLLh65YS8EoDgiVRG0fk9mgPDUIAcIVgTEcLtyQ9xN0QBcj/Tq+tNsdXR5Ha79YTkexMJVIN76EIt0FLgGf+p5qEdcbuJQg3nUR6/u60CHvjKJ6QiTv0Axc46xraI97A/O3KUZRQn+/dAIQci7r7DGjqVrZLQbCLHbe/DSsoyQObhI2waF4mo7+xKxA++Gal5w+OZ48aO0="
 
@@ -211,3 +211,4 @@ kc.write_keychain(cert, priv_key);
 dec_priv_key = kc.read_keychain()[1]
 if priv_key == dec_priv_key :
     print "OK"
+'''
