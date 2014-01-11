@@ -21,6 +21,7 @@ import mmap
 import struct
 import string
 import traceback
+import hashlib
 from base64 import b64encode, b64decode
 from os import path, stat
 from ctypes import *
@@ -85,6 +86,16 @@ def AES_decrypt(encrypted, key):
     cipher = AES.new(key, AES.MODE_CFB, iv)
     return cipher.decrypt(msg[AES.block_size:])
 
+def derive_key(secret):
+    #Stretch keys over SHA1 hash of password 10 times.
+    key = '';
+    for i in xrange(10):
+        sha256_str = hashlib.sha256()
+        sha256_str.update(key + secret)
+        key = sha256_str.digest()
+    return key
+
+
 class KeyChain:
     MASTER_KEY_PAIR = 0
     ERROR_KEY_EXIST = 1
@@ -98,6 +109,7 @@ class KeyChain:
         self.keychain_path = keychain_path
         self.kc_key = PBKDF2(password, name, 32, 5000)
         self.kc_file = open(self.keychain_path, 'a+')
+        self.key_enc_key = derive_key(self.password)
         stat(self.keychain_path)
 
     def read_keychain(self):
@@ -116,7 +128,7 @@ class KeyChain:
         _offset += 4
         cert_pem = struct.unpack(str(cert_len)+'s', kc_mm[_offset:_offset+cert_len])[0]
         _offset += cert_len
-        key_pem  = struct.unpack(str(key_len)+'s', kc_mm[_offset:_offset+key_len])[0]
+        key_pem  = AES_decrypt(struct.unpack(str(key_len)+'s', kc_mm[_offset:_offset+key_len])[0], self.key_enc_key)
         return cert_pem, key_pem
 
     def write_keychain(self, certificate, priv_key):
@@ -134,7 +146,7 @@ class KeyChain:
         self.kc_file.write(struct.pack('I', cert_len))
         self.kc_file.write(struct.pack('I', key_len))
         self.kc_file.write(certificate)
-        self.kc_file.write(priv_key)
+        self.kc_file.write(AES_encrypt(priv_key, self.key_enc_key))
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
@@ -148,7 +160,8 @@ class KeyChain:
         self.kc_file.write(struct.pack('I', cert_len))
         self.kc_file.write(struct.pack('I', key_len))
         self.kc_file.write(cert)
-        self.kc_file.write(key)
+        #Encrypt the key before writing it to storage.
+        self.kc_file.write(AES_encrypt(key, self.key_enc_key))
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
@@ -157,10 +170,7 @@ class KeyChain:
         Encrypt the secret_key with keychain_key using AES.MODE_CBC
         with an initialization vector...
         '''
-        #TODO: Implement encryption correctly...
         encrypted_key = None
-        cipher = AES.new(self.kc_key)
-        encrypted_key = cipher.encrypt(secret_key)
         return encrypted_key
 
     def decrypt_key(self, keychain_key, encrypted_key):
