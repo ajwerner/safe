@@ -6,4 +6,4 @@
 logging.basicConfig(format='%(levelname)s:%(message)s')
 
 from configuration import Configuration
-from namespace import Namespace
+from safe_user import SafeUser

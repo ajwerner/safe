@@ -1,17 +1,17 @@
-from device import Device
+from safe_device import SafeDevice
 from tofu import *
 from configuration import Configuration
-from namespace import Namespace
+from safe_user import SafeUser
 import sys, getopt
 
 def dev_controller_join_ns():
     conf = Configuration("%s" % raw_input("Device Configuration Dir: "))
     try:
-        ns = Namespace(conf)
+        ns = SafeUser(conf)
     except Exception as e:
         print e
     tc = tofu(input_callback)
-    ns = Namespace.join(conf, tc)
+    ns = SafeUser.join(conf, tc)
     return ns
 
 def dev_controller_add_dev(ns):
@@ -32,7 +32,7 @@ def main(argv):
             sys.exit()
         elif opt in ("-a", "--add-dev"):
             conf = Configuration()
-            ns = Namespace(conf)
+            ns = SafeUser(conf)
             dev_controller_add_dev(ns)
             sys.exit()
         elif opt in ("-j", "--join-ns"):

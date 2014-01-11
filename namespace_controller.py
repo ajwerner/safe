@@ -1,4 +1,4 @@
-from namespace import Namespace
+from safe_user import SafeUser
 from peer_ns import PeerNS
 from tofu import *
 from configuration import Configuration
@@ -15,7 +15,7 @@ def ns_controller_add_ns(ns):
 
 def main(argv):
     conf = Configuration()
-    ns = Namespace(conf)
+    ns = SafeUser(conf)
     try:
         opts, args = getopt.getopt(argv,"haj",["add-ns","join-ns"])
     except getopt.GetoptError as e:

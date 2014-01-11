@@ -61,7 +61,7 @@ class X509:
             if self.dev_id is None:
                 self.dev_CN_str = self.ns_name+".safe.com"
             else:
-                self.dev_CN_str = self.dev_id+"."+self.ns_name+".safe.com"
+                self.dev_CN_str = "%s.%s.safe.com" % (str(self.dev_id), self.ns_name)
             self.cert.get_subject().CN   = self.dev_CN_str
             self.cert.set_issuer(self.cert.get_subject())
             self.cert.set_pubkey(self.pkey)

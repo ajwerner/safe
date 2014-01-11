@@ -174,8 +174,6 @@ class KeyChain:
         privkey_pem = self.read_keychain()[1]
         return decrypt_with_privkey(privkey_pem, message)
 
-
-
 ''' Test KeyCahin class
 kc = KeyChain("/tmp", "wathsala", "1234")
 ret = kc.write_keychain("fsfasfafsadgsd", "sfdf")

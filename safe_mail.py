@@ -9,7 +9,7 @@ import smtplib
 import getpass, imaplib
 import email
 from configuration import *
-from namespace import *
+from safe_user import *
 
 class safe_mail(object):
 

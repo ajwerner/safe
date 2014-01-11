@@ -27,9 +27,9 @@ class DeviceError():
     def __str__(self):
         return str(self.value)
 
-class DeviceEncoder(json.JSONEncoder):
+class SafeDeviceEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, Device):
+        if isinstance(obj, SafeDevice):
             obj_dict = copy.deepcopy(obj.__dict__)
             if '_conf' in obj_dict:
                 del obj_dict['_conf']
@@ -39,22 +39,23 @@ class DeviceEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
         
-class DeviceDecoder(json.JSONDecoder):
+class SafeDeviceDecoder(json.JSONDecoder):
     def decode(self, json_str):
         try:
             dec_dict = json.loads(str(json_str))
         except ValueError as e:
             raise e
         if dec_dict is not None:
-            return Device(**dec_dict)
+            return SafeDevice(**dec_dict)
         else:
             return None
 
-class Device():
-    DECODER = DeviceDecoder
-    ENCODER = DeviceEncoder
+class SafeDevice():
+    DECODER = SafeDeviceDecoder
+    ENCODER = SafeDeviceEncoder
 
     def __init__(self, dev_id=None, dev_name=None, app_obj=None, int_ts=-1, ns_name=None, cert_pem=None):
+        # TODO: audit this class, do we need app_obj, what is ns_name?
         self.dev_id = dev_id
         if self.dev_id < 0 or self.dev_id > 65535:
             raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
@@ -67,23 +68,16 @@ class Device():
             self.int_ts = int_ts
         self.cert_pem = cert_pem
 
-    @classmethod
-    def load_device(cls, conf):
-        with open(conf.dev_conf, "r") as json_in:
-            dev = json.load(json_in, cls=DeviceDecoder)
-            return cls(dev.dev_id, dev.dev_name, dev.app_obj, 
-                    conf, dev.int_ts, dev.ns_name, dev.cert_pem)
-
     def join_namespace(self, ns_name, connection):
-        dev_json_str = json.dumps(self, cls=Device.ENCODER)
+        dev_json_str = json.dumps(self, cls=SafeDevice.ENCODER)
         connection.send(dev_json_str)
         signed_cert_pem = connection.receive()
         self.cert_pem = signed_cert_pem
 
     def sync_local_storage(self):
         if self.ns_name is not None:
-            with open(self._conf.dev_conf, "w") as json_out:
-                json.dump(self, json_out, cls=DeviceEncoder)
+            with open(self._conf['dev_conf'], "w") as json_out:
+                json.dump(self, json_out, cls=SafeDeviceEncoder)
         else:
             raise DeviceError("Device "+str(self.dev_id)+" is not in any namespace")
 
