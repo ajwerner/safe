@@ -24,7 +24,7 @@ class safe_mail(object):
     #Send the mail
     msg = "\nHello!" # The /n separates the message from the headers
     
-    config = Configuration(".safe")  
+    
     server.sendmail(account+"@gmail.com", 
         raw_input("Please enter receiver email address: "), msg)
 

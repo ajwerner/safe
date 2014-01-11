@@ -37,16 +37,16 @@ class tofu(object):
       self.j_id= rec['j_id']
       self.j_pwd= rec['j_pwd']
       self.receiver= rec['rcpt']
-      self.flag=1
       self.enc=''
- 
+      self.msg_queue = []
+      
   def messageCB(self, conn, msg):
     msg_body=str(msg.getBody())
     sender = str(msg.getFrom()).split('/')[0]
+    msg_queue.append(msg_body)
     #if sender != self.receiver:
     #    return
     self.enc=base64.decodestring(msg_body)
-    self.flag = 0
 
   def StepOn(self, conn):
     try:
@@ -59,6 +59,12 @@ class tofu(object):
     while self.StepOn(conn):
       pass
   
+  def tofu_receive(self):
+    return self.msg_queue.pop()
+
+  def disconnect(self):
+    self.flag = 0
+
   def send(self, message):
     #BS = 16
     #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
@@ -106,6 +112,7 @@ class tofu(object):
     #print 'authenticated using', auth
 
     cl.send(xmpp.protocol.Message(tojid,text))
+    #cl.disconnect()
 
   def receive(self):
     
@@ -154,4 +161,4 @@ class tofu(object):
 
     return shared_key
 
-
+  
