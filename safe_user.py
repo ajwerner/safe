@@ -265,7 +265,7 @@ class SafeUser(object):
         return ns
 
     def add_peer(self, connection):
-        #read the device out from the connection...
+        #read namespace info from the connection...
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
         peer_ns_cert_pem = peer_ns.pub_key
