@@ -87,12 +87,9 @@ def AES_decrypt(encrypted, key):
     return cipher.decrypt(msg[AES.block_size:])
 
 def derive_key(secret):
-    #Stretch keys over SHA1 hash of password 10 times.
-    key = '';
-    for i in xrange(10):
-        sha256_str = hashlib.sha256()
-        sha256_str.update(key + secret)
-        key = sha256_str.digest()
+    sha256_str = hashlib.sha256()
+    sha256_str.update(secret)
+    key = sha256_str.digest()
     return key
 
 
