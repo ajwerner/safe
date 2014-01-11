@@ -266,17 +266,6 @@ class SafeUser(object):
 
     def add_peer(self, connection):
         #read namespace info from the connection...
-        peer_ns_json = connection.receive()
-        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
-        peer_ns_cert_pem = peer_ns.pub_key
-        self._add_peer_namespace(peer_ns)
-        ns = self.get_peer_namespace()
-        ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
-        connection.send(ns_json)
-
-    def join_peer_namespace(self, connection):
-        #send a PeerNS instance of this namespace to the 
-        #other namespace...
         ns = self.get_peer_namespace()
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)

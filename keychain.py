@@ -73,6 +73,7 @@ def verify_signature(cert_pem, message, sig):
     return verifier.verify(h, b64decode(sig))
 
 def AES_encrypt(serialization, key):
+    print b64encode(key)
     """returns a base64 encoded AES encrypted copy of serialization"""
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(key, AES.MODE_CFB, iv)
@@ -80,6 +81,7 @@ def AES_encrypt(serialization, key):
     return b64encode(msg)
 
 def AES_decrypt(encrypted, key):
+    print b64encode(key)
     """returns a base64 encoded AES encrypted copy of serialization"""
     msg = b64decode(encrypted)
     iv = msg[:AES.block_size]
@@ -136,21 +138,23 @@ class KeyChain:
         rec = self.read_keychain()
         if rec is not None:
             return -KeyChain.ERROR_KEY_EXIST
+        encrypted_key = AES_encrypt(priv_key, self.key_enc_key)
         cert_len = len(certificate)
-        key_len  = len(priv_key)
+        key_len  = len(encrypted_key)
         _offset = 0
         self.kc_file.seek(_offset,0)
         self.kc_file.write(struct.pack('I', cert_len))
         self.kc_file.write(struct.pack('I', key_len))
         self.kc_file.write(certificate)
-        self.kc_file.write(AES_encrypt(priv_key, self.key_enc_key))
+        self.kc_file.write(encrypted_key)
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
     def update_keychain(self, cert):
         rec = self.read_keychain()
         key = rec[1]
-        key_len = len(key)
+        encrypted_key = AES_encrypt(priv_key, self.key_enc_key)
+        key_len = len(encrypted_key)
         cert_len = len(cert)
         self.kc_file.seek(0,0)
         self.kc_file.truncate(0)
@@ -158,7 +162,7 @@ class KeyChain:
         self.kc_file.write(struct.pack('I', key_len))
         self.kc_file.write(cert)
         #Encrypt the key before writing it to storage.
-        self.kc_file.write(AES_encrypt(key, self.key_enc_key))
+        self.kc_file.write(encrypted_key)
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
@@ -197,14 +201,13 @@ class KeyChain:
         privkey_pem = self.read_keychain()[1]
         return decrypt_with_privkey(privkey_pem, message)
 
-''' Test KeyCahin class
-kc = KeyChain("/tmp", "wathsala", "1234")
-ret = kc.write_keychain("fsfasfafsadgsd", "sfdf")
-if ret == KeyChain.SUCCESS:
-    print "Success"
-else:
-    print ret
-device_data = kc.read_keychain()
-print "CERTIFICATE >>> "+str(device_data[0])
-print "PRIVATE_KEY >>> "+str(device_data[1])
-'''
+''' Test KeyCahin class'''
+kc = KeyChain("/tmp/test.kc", "wathsala", "1234")
+priv_key = "1kAFRoFPN41VfpItASjNN3gjLe0YhHonysH22A1VVzb8J+ZtMU7OfO7NEswtcF3DLG+6oeG9sLbgyzC45s/QO3vdmQSGnnYbiIR3xD+lgTE4uoeMz54n6YCJEhO+o5Vb49jl/p9YO5MQx6ghOAMVXuqkoAcZFFqsGAguMCirkrDmjEqjbR/ntoxEv7tbe8gr70C1uwV/PWiyinAhIgXVaNKI6G41HTeBDRSIXeMmpumUPyZDXhxgsF1zQWlXiCF+fYal8KlIQ3qx+Jc7MD4cMjFXcjaAw5wIxnjR6Tc2cIHtuSxBi4ZghwVc1/Caas5p1vSDGQOOTZUT5DLQhwMt0Q+qt+RoqYeTgSRuU2Xh5yKZOXZ/ag69wTKJhzDmEy6YxL+2Nfi5JpXX3iGECahwbmf8ZANV1rH/AtrHQ9CbAx0a0SIwL9WZbOCtUHwlXRV271NscUnHbJAw8QICpqPwZ8AzvESqjFz/3g2YYV7+L8rVz6EMRqPJ7ceVSCqu0L3Ap+f5wTG07R7XIEKCoKBcaKuAboE+Cr3Ypw2rGt7Fep2CDBfyd1Q8fvjkM6C8tO7SAmMwpLuyv0Qanx31DNzhOA1u8ffqPXEfDBVGpyAB9SBYmNOYVChGJcROpdwzwdjKIzqj0HtIW7EaCRgClCBE0tsLo8tFuSSxIoFtsO/E3ypw5MI2zI89vfsSuMbbrQDXKE48+onaUrnTzXvmLZEo7NqWQ/dFPPQ1+B9NMyCnr+FXe58tWgjzn+z1feskG2Zp7FlltI2BQViCeqio++L7smZtQ8AOiCqcF1Awqkw8w/SU58oQwaPo6Kc9PkqWGZw2smOPfCq6PpE8HVe3IWLCVKe3sfZHdjCSUzCeOkzmf0R/WoyW5a8iObwTQtVezho9LC87LzmXXJw4qU51evhiZQC6BSWxfC2IRRHRKOlcBxJhSvkL1AX+6SGzjNTv9DZjZfMv7A2LWaDnuW+Dov+xtGMLujtNnCuN59pUEZUp1pdkrU2T7afJi2fxnobQPBpX7qy5w94EAIOV5yJkAGLLh65YS8EoDgiVRG0fk9mgPDUIAcIVgTEcLtyQ9xN0QBcj/Tq+tNsdXR5Ha79YTkexMJVIN76EIt0FLgGf+p5qEdcbuJQg3nUR6/u60CHvjKJ6QiTv0Axc46xraI97A/O3KUZRQn+/dAIQci7r7DGjqVrZLQbCLHbe/DSsoyQObhI2waF4mo7+xKxA++Gal5w+OZ48aO0="
+
+cert = "1kAFRoFPN41VfpItASjNN3gjLe0YhHonysH22A1VVzb8J+ZtMU7OfO7NEswtcF3DLG+6oeG9sLbgyzC45s/QO3vdmQSGnnYbiIR3xD+lgTE4uoeMz54n6YCJEhO+o5Vb49jl/p9YO5MQx6ghOAMVXuqkoAcZFFqsGAguMCirkrDmjEqjbR/ntoxEv7tbe8gr70C1uwV/PWiyinAhIgXVaNKI6G41HTeBDRSIXeMmpumUPyZDXhxgsF1zQWlXiCF+fYal8KlIQ3qx+Jc7MD4cMjFXcjaAw5wIxnjR6Tc2cIHtuSxBi4ZghwVc1/Caas5p1vSDGQOOTZUT5DLQhwMt0Q+qt+RoqYeTgSRuU2Xh5yKZOXZ/ag69wTKJhzDmEy6YxL+2Nfi5JpXX3iGECahwbmf8ZANV1rH/AtrHQ9CbAx0a0SIwL9WZbOCtUHwlXRV271NscUnHbJAw8QICpqPwZ8AzvESqjFz/3g2YYV7+L8rVz6EMRqPJ7ceVSCqu0L3Ap+f5wTG07R7XIEKCoKBcaKuAboE+Cr3Ypw2rGt7Fep2CDBfyd1Q8fvjkM6C8tO7SAmMwpLuyv0Qanx31DNzhOA1u8ffqPXEfDBVGpyAB9SBYmNOYVChGJcROpdwzwdjKIzqj0HtIW7EaCRgClCBE0tsLo8tFuSSxIoFtsO/E3ypw5MI2zI89vfsSuMbbrQDXKE48+onaUrnTzXvmLZEo7NqWQ/dFPPQ1+B9NMyCnr+FXe58tWgjzn+z1feskG2Zp7FlltI2BQViCeqio++L7smZtQ8AOiCqcF1Awqkw8w/SU58oQwaPo6Kc9PkqWGZw2smOPfCq6PpE8HVe3IWLCVKe3sfZHdjCSUzCeOkzmf0R/WoyW5a8iObwTQtVezho9LC87LzmXXJw4qU51evhiZQC6BSWxfC2IRRHRKOlcBxJhSvkL1AX+6SGzjNTv9DZjZfMv7A2LWaDnuW+Dov+xtGMLujtNnCuN59pUEZUp1pdkrU2T7afJi2fxnobQPBpX7qy5w94EAIOV5yJkAGLLh65YS8EoDgiVRG0fk9mgPDUIAcIVgTEcLtyQ9xN0QBcj/Tq+tNsdXR5Ha79YTkexMJVIN76EIt0FLgGf+p5qEdcbuJQg3nUR6/u60CHvjKJ6QiTv0Axc46xraI97A/O3KUZRQn+/dAIQci7r7DGjqVrZLQbCLHbe/DSsoyQObhI2waF4mo7+xKxA++Gal5w+OZ48aO0="
+
+kc.write_keychain(cert, priv_key);
+dec_priv_key = kc.read_keychain()[1]
+if priv_key == dec_priv_key :
+    print "OK"
