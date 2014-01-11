@@ -15,6 +15,7 @@ import boto
 import getpass
 import os
 import random
+from tofu       import tofu, input_callback
 from safe_device     import SafeDevice
 from OpenSSL    import crypto, SSL
 from X509       import X509, X509Error
@@ -35,19 +36,40 @@ AWS_USERNAME = 'aws_username'
 AWS_ACCESS_KEY = 'aws_access_key_id'
 AWS_SECRET_KEY = 'aws_secret_key_id'
 
-def join_namespace(config_dir):
+def join_namespace(conf):
     """ initiates a tofu connection with another device for this user,
         gets the AWS and namespace configuration information, 
         writes that to disk
     """
-    # tofu <- make tofu to another device (using the SafeUser.add_device() )
-    # conf <- receive configuration from tofu
-    # set up the device
-    #    get a name / device id
-    #    make a certificate
-    #    write the keychain
-    #    send the certificate back over the tofu
-    # return conf
+
+    t = tofu(input_callback)
+    conf['aws_conf'] = json.loads(t.receive())
+    conf['user_conf'] = json.loads(t.receive())
+    conf['dev_conf'] = {
+        'dev_name': raw_input("Device Name: ").strip(),
+        'dev_id': random.randint(0, 65535)
+    }
+    cert_pem, privkey_pem = create_device_certificates(conf)
+    conf['dev_conf']['cert_pem'] = cert_pem
+    # Make the keychain
+    dev = SafeDevice(**conf['dev_conf'])
+
+    dev_json = json.dumps(conf['dev'], cls=SafeDevice.ENCODER)
+
+    t.send(dev_json)
+
+    signed_cert_pem = t.receive()
+    conf['dev_conf']['cert_pem'] = signed_cert_pem
+
+    with open(conf['conf_path'], 'w') as conf_file:
+        json_string = json.dumps(conf)
+        conf_file.write(json_string)
+
+    kc_password = getpass.getpass("Enter a password for this device's Keychain: ")
+    kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
+    kc.write_keychain(signed_cert_pem, privkey_pem)
+    conf['dev_keychain'] = kc
+    conf['dev'] = SafeDevice(**conf['dev_conf'])
 
 def initialize_new_conf(conf):
     """ creates a new configuration file from prompting a user for the fields"""
@@ -57,13 +79,15 @@ def initialize_new_conf(conf):
         'dev_id': random.randint(0, 65535)
     }
     user_info = {
-            'country': raw_input("Country: ").strip(),
-            'state': raw_input("State: ").strip(),
-            'city': raw_input("City: ").strip() }
+        'country': raw_input("Country: ").strip(),
+        'state': raw_input("State: ").strip(),
+        'city': raw_input("City: ").strip(),
+        'email': raw_input("Email Address: ").strip(),
+    }
     aws_info = {
-            AWS_USERNAME: raw_input("AWS Username: ").strip(),
-            AWS_ACCESS_KEY: raw_input("AWS Access Key: ").strip(),
-            AWS_SECRET_KEY: raw_input("AWS Secret Key: ").strip()
+        AWS_USERNAME: raw_input("AWS Username: ").strip(),
+        AWS_ACCESS_KEY: raw_input("AWS Access Key: ").strip(),
+        AWS_SECRET_KEY: raw_input("AWS Secret Key: ").strip()
     }
     conf.update({
         'dev_conf': dev_info,
@@ -82,6 +106,7 @@ def initialize_new_conf(conf):
     kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
     kc.write_keychain(cert_pem, privkey_pem)
     conf['dev_keychain'] = kc
+    conf['dev'] = SafeDevice(**conf['dev_conf'])
 
 def load_existing_conf(conf):
     """ loads an existing configuration from the configuration path"""
@@ -92,7 +117,7 @@ def load_existing_conf(conf):
     kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
     conf['dev_conf']['cert_pem'] = kc.read_keychain()[0]
     conf['dev_keychain'] = kc
-    return conf
+    conf['dev'] = SafeDevice(**conf['dev_conf'])
 
 def create_device_certificates(conf, signer = None):
     """ 
@@ -144,7 +169,6 @@ def get_config(conf_dir):
             conf = join_namespace(conf)
             break
     # init 
-    conf['dev'] = SafeDevice(**conf['dev_conf'])
     return conf
 
 def conf_is_valid(conf_dict):

@@ -73,7 +73,7 @@ class AccountCompromisedException(Exception):
 class SafeUser(object):
     # the keys used to sign and verify the state
     STATE_KEYS = ['privkey_pem', 'cert_pem', 'state_keys', 'ns_list', 'dev_list', 'metadata_keys', 'metadata']
-    PROTECTED_METADATA_KEYS = ['cert_pem', 'ns_name']
+    PROTECTED_METADATA_KEYS = ['cert_pem', 'ns_name', 'email']
 
     def __init__(self, conf_dir=".safe_config"):
         self.conf = get_config(conf_dir)
@@ -88,6 +88,8 @@ class SafeUser(object):
 
     def add_device(self, tofu_connection):
         #read the device out from the connection...
+        tofu_connection.send(json.dumps(self.conf['aws_conf']))
+        tofu_connection.send(json.dumps(self.conf['user_conf']))
         json_dev_str = tofu_connection.receive()
         dev = json.loads(json_dev_str, cls=SafeDevice.DECODER)
         assert isinstance(dev, SafeDevice)
@@ -142,7 +144,7 @@ class SafeUser(object):
         self.cert_pem = rec[0]
         self.privkey_pem  = rec[1]
         # set up the metadata
-        self.metadata = {'cert_pem': self.cert_pem, 'name': self.name}
+        self.metadata = {'cert_pem': self.cert_pem, 'name': self.name, 'email': self.conf['user_conf']['email']}
         self.metadata_key = Random.new().read(32)
         self.metadata_keys = {self.id: b64encode(encrypt_with_cert(self.cert_pem, self.metadata_key))}
         # create the state object in AWS
@@ -248,6 +250,9 @@ class SafeUser(object):
             self.metadata_key = decrypt_with_privkey(self.privkey_pem, metadata_key)
 
         self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
+
+    def get_peers(self):
+        return list(self._peer_list)
 
     @classmethod
     def join(cls, conf, tofu):
