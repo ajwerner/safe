@@ -6,8 +6,6 @@ __credits__     = ["Wathsala Vithanage", "Andrew Werner"]
 __license__     = "Apache"
 __version__     = "0.1"
 
-
-
 import sys, os, xmpp, time, base64
 import hashlib
 import getpass

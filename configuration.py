@@ -28,6 +28,7 @@ REGION = 'us-east-1'
 CONF_PATH       = 'conf.json'
 DEV_LIST_PATH   = 'dev_list.json'
 NS_LIST_PATH    = 'ns_list.json'
+LOG_PATH        = 'log.json'
 KC_PATH         = 'device_keychain.kc'
 
 AWS_USERNAME = 'aws_username'
@@ -93,7 +94,6 @@ def load_existing_conf(conf):
     conf['dev_keychain'] = kc
     return conf
 
-
 def create_device_certificates(conf, signer = None):
     """ 
     creates a X509 certificate/private key pair 
@@ -120,6 +120,7 @@ def get_config(conf_dir):
 
     conf['conf_path'] = path.join(conf_dir, CONF_PATH)
     conf['kc_path'] = path.join(conf_dir, KC_PATH)
+    conf['log_path'] = path.join(conf_dir, LOG_PATH)
     if path.exists(conf['conf_path']):
         load_existing_conf(conf)    
         if not conf or not conf_is_valid(conf):

@@ -2,8 +2,5 @@
 #  __init__.py
 #
 
-#Setup logging...
-logging.basicConfig(format='%(levelname)s:%(message)s')
-
-from configuration import Configuration
-from safe_user import SafeUser
+from safe.safe_user import SafeUser
+import safe.tofu

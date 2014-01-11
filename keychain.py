@@ -25,6 +25,8 @@ from base64 import b64encode, b64decode
 from os import path, stat
 from ctypes import *
 from Crypto import Random
+from Crypto.Hash import SHA
+from Crypto.Signature import PKCS1_PSS
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
@@ -53,6 +55,21 @@ def decrypt_with_privkey(privkey_pem, message):
     privkey = RSA.importKey(privkey_pem)
     pkcs = PKCS1_OAEP.new(privkey)
     return pkcs.decrypt(message)
+
+def sign_with_privkey(privkey_pem, message):
+    privkey = RSA.importKey(privkey_pem)
+    h = SHA.new()
+    h.update(message)
+    signer = PKCS1_PSS.new(privkey)
+    return b64encode(signer.sign(h))
+
+def verify_signature(cert_pem, message, sig):
+    pubkey_pem = pubkey_from_cert(cert_pem)
+    pubkey = RSA.importKey(pubkey_pem)
+    h = SHA.new()
+    h.update(message)
+    verifier = PKCS1_PSS.new(pubkey)
+    return verifier.verify(h, b64decode(sig))
 
 def AES_encrypt(serialization, key):
     """returns a base64 encoded AES encrypted copy of serialization"""
@@ -140,7 +157,6 @@ class KeyChain:
         Encrypt the secret_key with keychain_key using AES.MODE_CBC
         with an initialization vector...
         '''
-
         #TODO: Implement encryption correctly...
         encrypted_key = None
         cipher = AES.new(self.kc_key)
@@ -185,4 +201,3 @@ device_data = kc.read_keychain()
 print "CERTIFICATE >>> "+str(device_data[0])
 print "PRIVATE_KEY >>> "+str(device_data[1])
 '''
-

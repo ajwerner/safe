@@ -12,13 +12,13 @@ import time
 import json
 import tofu
 import copy
-from os             import path
-from OpenSSL        import crypto, SSL
-from time           import gmtime, mktime
-from X509           import X509, X509Error
-from keychain       import KeyChain
-from Crypto.PublicKey import RSA
-from Crypto.Cipher  import PKCS1_OAEP
+from os                 import path
+from OpenSSL            import crypto, SSL
+from time               import gmtime, mktime
+from X509               import X509, X509Error
+from keychain      import KeyChain
+from Crypto.PublicKey   import RSA
+from Crypto.Cipher      import PKCS1_OAEP
 
 class DeviceError():
     def __init__(self, value):

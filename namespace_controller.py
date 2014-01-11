@@ -1,21 +1,20 @@
+
 from safe_user import SafeUser
 from peer_ns import PeerNS
 from tofu import *
-from configuration import Configuration
 import sys, getopt
 
 def ns_controller_join_ns(ns):
     #print ns.__dict__
     tc = tofu(input_callback)
-    ns.join_peer_namespace(tc)
+    ns.join_peer(tc)
 
 def ns_controller_add_ns(ns):
     tc = tofu(input_callback)
-    ns.add_peer_namespace(tc)
+    ns.add_peer(tc)
 
 def main(argv):
-    conf = Configuration()
-    ns = SafeUser(conf)
+    ns = SafeUser()
     try:
         opts, args = getopt.getopt(argv,"haj",["add-ns","join-ns"])
     except getopt.GetoptError as e:

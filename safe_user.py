@@ -19,24 +19,23 @@ import json
 import boto
 import logging
 import copy
-from tofu import *
-
-from configuration import get_config, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
-
+from configuration      import get_config, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
 from boto import iam
 from boto import dynamodb
 from boto.dynamodb.exceptions import DynamoDBKeyNotFoundError
+from base64             import b64decode, b64encode
+from OpenSSL            import crypto
+from Crypto             import Random
+from Crypto.Cipher      import AES, PKCS1_OAEP
+from Crypto.PublicKey   import RSA
+from Crypto.Hash.SHA256 import SHA256Hash
 
-from base64 import b64decode, b64encode
-from safe_list import SafeList
-from safe_device import SafeDevice
-from peer_ns import PeerNS
-from X509 import X509, X509Error
-from keychain import encrypt_with_cert, decrypt_with_privkey, AES_decrypt, AES_encrypt
-from OpenSSL import crypto
-from Crypto.Cipher import AES, PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto import Random
+from tofu          import *
+from safe_list     import SafeList
+from safe_device   import SafeDevice
+from peer_ns       import PeerNS
+from keychain      import *
+from X509          import X509, X509Error
 
 #Setup logging...
 logging.basicConfig(format='%(levelname)s:%(message)s')
@@ -53,7 +52,7 @@ def transaction(f):
             f(*args, **kwargs)
             new = self.serialize()
             for key, value in new.items():
-                if self.seriaized.get(key) and self.serialized.get(key) != value:
+                if self.serialized.get(key) and self.serialized.get(key) != value:
                     self.serialized[key] = value
             committed = self.serialized.save()
             if not committed:
@@ -64,7 +63,18 @@ def transaction(f):
             raise Exception("Failed to commit change after %d attempts" % (num_retries,)) 
     return wrapped
 
+class AccountCompromisedException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return str(self.value)
+
 class SafeUser(object):
+    # the keys used to sign and verify the state
+    STATE_KEYS = ['privkey_pem', 'cert_pem', 'state_keys', 'ns_list', 'dev_list', 'metadata_keys', 'metadata']
+    PROTECTED_METADATA_KEYS = ['cert_pem', 'ns_name']
+
     def __init__(self, conf_dir=".safe_config"):
         self.conf = get_config(conf_dir)
         self.name = self.conf['aws_conf'][AWS_USERNAME]
@@ -92,21 +102,6 @@ class SafeUser(object):
         #write the signed certificate dev.cert_pem back to connection
         tofu_connection.send(dev.cert_pem)
         logging.debug("Device Added")
-
-    def serialize(self):
-        """ returns a dictionary representing the serialization of the state of the namespace """
-        serialization = {
-            'privkey_pem': AES_encrypt(self.privkey_pem, self.state_key),
-            'cert_pem': AES_encrypt(self.cert_pem, self.state_key),
-            'state_keys': json.dumps(self.state_keys),
-            'ns_list': AES_encrypt(self.peer_list.serialize(), self.state_key),
-            'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
-            'metadata_keys': json.dumps(self.metadata_keys),
-            'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
-        }
-        # serialization['fork_log'] = self.;
-        return serialization
-        
 
     def _init_aws(self):
         """
@@ -157,6 +152,41 @@ class SafeUser(object):
         self._reconcile_state()
         return
 
+    def serialize(self):
+        """ returns a dictionary representing the serialization of the state of the namespace """
+        serialization = {
+            'privkey_pem': AES_encrypt(self.privkey_pem, self.state_key),
+            'cert_pem': AES_encrypt(self.cert_pem, self.state_key),
+            'state_keys': json.dumps(self.state_keys),
+            'ns_list': AES_encrypt(self.peer_list.serialize(), self.state_key),
+            'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
+            'metadata_keys': json.dumps(self.metadata_keys),
+            'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
+        }
+        # sign this serialization and add it to the state logs
+        sig = sign_with_privkey(self.privkey_pem, json.dumps(serialization))
+        if not hasattr(self, "logs") or not self.logs:
+            self.logs = [sig,]
+        elif sig != self.logs[0]:
+            self.logs = [sig] + (self.logs)
+        serialization['logs'] = json.dumps(self.logs)
+        return serialization
+
+    def _verify_signature(self, most_recent_sig):
+        serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in STATE_KEYS}
+        sig = SHA256Hash(json.dumps(serialized_dict)).hexdigest()
+        return true
+
+    def _read_logs(self):
+        if not os.path.exists(self.conf['log_path']):
+            return []
+        with open(self.conf['log_path'], 'r') as log_file:
+            return json.load(log_file)
+
+    def _write_logs(self, logs):
+        with open(self.conf['log_path'], 'w') as log_file:
+            return json.dump(logs, log_file)
+
     def _reconcile_state(self):
         """
         updates the in-memory representation of the state object to represent the remote serialization.
@@ -169,8 +199,6 @@ class SafeUser(object):
             self._initialize_state(namespace_table)
             return
 
-        # Verify log is not forked, then accept log
-
         # Get the state_key
         self.state_keys = json.loads(self.serialized['state_keys'])
         if str(self.conf['dev'].dev_id) not in self.state_keys:
@@ -182,6 +210,20 @@ class SafeUser(object):
         # Get the namespace keys
         self.cert_pem = AES_decrypt(self.serialized['cert_pem'], self.state_key)
         self.privkey_pem = AES_decrypt(self.serialized['privkey_pem'], self.state_key)
+
+        # Check the logs
+        self.logs = self._read_logs()
+        logs = json.loads(self.serialized['logs'])
+        for i, sig in enumerate(reversed(self.logs)):
+            if logs[-i] != sig:
+                raise AccountCompromisedException("")
+
+        # verify the state signature
+        serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in SafeUser.STATE_KEYS}
+        if self.logs and not verify_signature(self.cert_pem, json.dumps(serialized_dict), self.logs[0]):
+            raise AccountCompromisedException("it appears that the SafeUser state has been compromised")
+        self.logs = logs
+        self._write_logs(logs)
 
         # Get the peer ns list
         dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)
@@ -217,7 +259,7 @@ class SafeUser(object):
         ns = cls(conf)
         return ns
 
-    def peer(self, connection):
+    def add_peer(self, connection):
         #read the device out from the connection...
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
@@ -256,8 +298,10 @@ class SafeUser(object):
         # disallow the peer namespace from accessing the metadata
 
     @transaction
-    def update_metadata(self, new_metadata):
-        self.metadata = new_metadata
+    def update_metadata_key(self, key, value):
+        if key in SafeUser.PROTECTED_METADATA_KEYS:
+            raise Exception("Cannot update %s in metadata, it is a protected key" % key)
+        self.metadata[key] = value
 
     def get_peer_namespace(self):
         x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
