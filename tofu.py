@@ -114,7 +114,7 @@ class tofu(object):
         if msg_id != self.id or msg_prefix == self.prefix:
             return
         sender = str(msg.getFrom()).split('/')[0]
-        body = msg.getBody()[4:]
+        body = msg.getBody()[len(self.id) + PREFIX_LEN:]
         if hasattr(self, "first_message") and body == self.first_message:
             return
         self.msg_queue.append(body) 
@@ -127,7 +127,7 @@ class tofu(object):
         if hasattr(self, "first_message") and msg.getBody() == self.first_message:
             return
         import ipdb; ipdb.set_trace()
-        msg_body = msg.getBody()[4:]
+        msg_body = msg.getBody()[len(self.id) + PREFIX_LEN:]
         if msg_body == self.first_message:
             return
         msg_body=base64.b64decode(str(msg_body))
