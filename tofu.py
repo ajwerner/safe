@@ -34,7 +34,7 @@ class tofu(object):
         self.recv_thread = None
         self.connected = threading.Event()
         self.msg_queue = []
-        self.prefix = b64encode(Random.new().read(PREFIX_LEN))[:PREFIX_LEN]
+        self.prefix = base64.b64encode(Random.new().read(PREFIX_LEN))[:PREFIX_LEN]
         DH = DiffieHellman()
 
         self._listen()
