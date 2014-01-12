@@ -216,20 +216,18 @@ class SafeUser(object):
         self.privkey_pem = AES_decrypt(self.serialized['privkey_pem'], self.state_key)
 
         # Check the logs
-        import ipdb
-        with ipdb.launch_ipdb_on_exception():
-            self.logs = self._read_logs()
-            logs = json.loads(self.serialized['logs'])
-            for i, sig in enumerate(reversed(self.logs)):
-                if logs[-(i+1)] != sig:
-                    raise AccountCompromisedException("")
+        self.logs = self._read_logs()
+        logs = json.loads(self.serialized['logs'])
+        for i, sig in enumerate(reversed(self.logs)):
+            if logs[-(i+1)] != sig:
+                raise AccountCompromisedException("")
 
-            # verify the state signature
-            serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in SafeUser.STATE_KEYS}
-            if logs and not verify_signature(self.cert_pem, json.dumps(serialized_dict), logs[0]):
-                raise AccountCompromisedException("it appears that the SafeUser state has been compromised")
-            self.logs = logs
-            self._write_logs(logs)
+        # verify the state signature
+        serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in SafeUser.STATE_KEYS}
+        if logs and not verify_signature(self.cert_pem, json.dumps(serialized_dict), logs[0]):
+            raise AccountCompromisedException("it appears that the SafeUser state has been compromised")
+        self.logs = logs
+        self._write_logs(logs)
 
         # Get the peer ns list
         dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)

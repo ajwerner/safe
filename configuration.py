@@ -169,7 +169,7 @@ def get_config(conf_dir):
             initialize_new_conf(conf)
             break
         elif (response_char == 'n'):
-            conf = join_namespace(conf)
+            join_namespace(conf)
             break
     # init 
     return conf
