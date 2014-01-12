@@ -130,7 +130,6 @@ class tofu(object):
             self.condition.notify()
             self.condition.release()
         else:
-            print body
             body = base64.b64decode(body)
             key=hashlib.sha256(self.secret_value).digest()
             iv=body[:AES.block_size]
