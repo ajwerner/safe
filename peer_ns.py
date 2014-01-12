@@ -53,21 +53,19 @@ class PeerNS:
     ENCODER = PeerNSEncoder
     DECODER = PeerNSDecoder
 
-    def __init__(self, ns_id, ns_name, pub_key, ctime=-1, remote_index=None, local_index=None):
-        if not isinstance(ns_id, int):
-            raise PeerNSError("Bad Namespace ID (ns_id="+str(ns_id)+")")
+    def __init__(self, id=None, user_name=None, cert_pem=None, ctime=-1, remote_index=None, local_index=None):
         self.remote_index = remote_index
         self.local_index = local_index
-        self.ns_id = ns_id
-        self.ns_name = ns_name
-        self.pub_key = pub_key
+        self.id = id
+        self.user_name = user_name
+        self.cert_pem = cert_pem
         if ctime > -1:
             self.ctime = ctime
         else:
             self.ctime = time.time()
 
     def __str__(self):
-        return self.ns_name+"#"+"x{0:x}".format(self.ns_id)+"@"+str(self.ctime)
+        return self.user_name
 
     def __hash__(self):
         return self.ns_id
@@ -79,17 +77,6 @@ class PeerNS:
             return -1
         else:
             return 1
-
-    def get_metadata(self, safe_user):
-        namespace_table = ns.dynamo.get_table('namespaces')
-        serialized = namespace_table.get_item(hash_key=self.ns_id)
-        metadata_keys = json.loads(self.serialized['metadata_keys'])
-        if safe_user.id != metadata_keys:
-            raise PeerNSError("Namespace not authorized to access peer namespace")
-        metadata_key_enc = b64decode(self.metadata_keys[self.id])
-        metadata_key = decrypt_with_privkey(safe_user.privkey_pem , metadata_key_enc)
-        return AES_decrypt(serialized['metadata'], metadata_key)
-
 
 
 '''Test PeerNS class

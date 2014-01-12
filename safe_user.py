@@ -337,9 +337,4 @@ class SafeUser(object):
         self.metadata[key] = value
 
     def get_peer_user_object(self):
-        x509 = X509.load_certificate_from_keychain(self.conf["kc_path"], self.name)
-        cert_key = x509.get_PEM_certificate()
-        cert = cert_key[0]
-        print cert
-        self_ns = PeerNS(0, self.name, cert) 
-        return self_ns
+        return PeerNS(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
