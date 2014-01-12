@@ -56,7 +56,7 @@ def transaction(f):
         while not committed and retries_left:
             retries_left -= 1
             f(*args, **kwargs)
-            new = self.serialize()
+            new = self._serialize()
             for key, value in new.items():
                 if self.serialized.get(key) and self.serialized.get(key) != value:
                     self.serialized[key] = value
@@ -107,6 +107,7 @@ class SafeUser(object):
         self.dynamo = boto.connect_dynamodb(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
         self.iam = boto.connect_iam(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
         self.s3 = boto.connect_s3(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
+        self.sqs = boto.connect_sqs(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
         # will fail if you don't have credentials anymore
         try:
             user_response = self.iam.get_user()
@@ -122,6 +123,7 @@ class SafeUser(object):
 "This account cannot remove devices because an extra set of AWS keys have been created!")
         user = user_response['get_user_response']['get_user_result']['user']
         self.id = user['user_id']
+        self.sqs_queue = self.sqs.create_queue(self.id)
         return True
 
     def _close_aws(self):
@@ -173,7 +175,7 @@ class SafeUser(object):
         self._secure_state()
         self.metadata = {'cert_pem': self.cert_pem, 'name': self.name, 'email': self.conf['user_conf']['email']}
         # create the state object in AWS
-        self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
+        self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self._serialize())
         self.serialized.put()
         # rereconcile because we just changed the remote state
         self._reconcile_state()
@@ -317,10 +319,30 @@ class SafeUser(object):
 
         self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
 
-        # reconcile all the messages about updated identities
+        # drain the message queue and update keys accordningly
+        self._drain_message_queue()
 
-    def get_peers(self):
-        return list(self._peer_list)
+    def _drain_message_queue(self):
+        messages = self.sqs_queue.get_messages()
+        if not messages:
+            return
+        for message in message:
+            message_dict = json.loads(message)
+            sender = None
+            for peer in self.get_peer_list():
+                if peer.id == message_dict['id']:
+                    sender = peer
+                    break
+            if not sender:
+                logging.warn("receieved a message from an untrusted/unknown user %s" % message_dict['id'])
+            sender_md = self.get_metadata(sender)
+            old_sender_md_keys_index = b64encode(hashlib.sha256(sender.cert_pem + sender.local_index).digest())
+            del self.metadata_keys[old_sender_md_keys_index]
+            sender.cert_pem = sender_md['cert_pem']
+            # What do we do about usernames here?
+            new_sender_md_keys_index =  b64encode(hashlib.sha256(sender.cert_pem + sender.local_index).digest())
+            self.metadata_keys[new_sender_md_keys_index] = b64encode(encrypt_with_cert(sender.cert_pem, self.metadata_key))
+        self._reconcile_state()
 
     def get_metadata(self, peer_user):
         namespace_table = self.dynamo.get_table('namespaces')
@@ -329,7 +351,7 @@ class SafeUser(object):
         index = b64encode(hashlib.sha256(self.cert_pem + peer_user.remote_index).digest())
         if index in metadata_keys:
             metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
-            return AES_decrypt(serialized['metadata'], metadata_key)
+            return json.loads(AES_decrypt(serialized['metadata'], metadata_key))
         for (cert_pem, privkey) in self.old_identities:
             index = b64encode(hashlib.sha256(cert_pem + peer_user.remote_index).digest())
             if index in metadata_keys:
@@ -383,7 +405,14 @@ class SafeUser(object):
         peer_ns = PeerNS(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
         # peer_ns_cert_pem = peer_ns.pub_key
-        self._add_peer_namespace(peer_ns)
+        self._add_peer(peer_ns)
+
+
+    @transaction
+    def _add_peer(self, pns):
+        index = b64encode(hashlib.sha256(pns.cert_pem + pns.local_index).digest())
+        self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
+        self.peer_list.add(pns)
 
     def get_dev_list(self):
         return self.dev_list.get_list()
@@ -396,7 +425,7 @@ class SafeUser(object):
             raise Exception("you can't remove yourself")
         self._remove_device(device)
 
-        # get new access keys, and them in the dropbox for everybody
+        # get new access keys, and put them in the dropbox for everybody else
         new_access_keys_response = self.iam.create_access_key(self.conf['aws_conf'][AWS_USERNAME])
         access_keys_dict = new_access_keys_response['create_access_key_response']['create_access_key_result']['access_key']
         new_aws_conf = {
@@ -426,7 +455,9 @@ class SafeUser(object):
         self.iam.delete_access_key(old_aws_conf[AWS_ACCESS_KEY])
         self._init_aws()
 
-        # remove old key
+        update_msg = json.dumps({"event": "keys_changed", "id": self.id})
+        for peer in self.get_peer_list():
+            self.sqs.send_message(peer.id, update_msg)
         # inform the other peers of the removal
 
     @transaction
@@ -437,12 +468,6 @@ class SafeUser(object):
         else:
             self.old_identities = [(self.cert_pem, self.privkey_pem)]
         self._secure_state()
-
-    @transaction
-    def _add_peer_namespace(self, pns):
-        index = hashlib.sha256(pns.cert_pem + pns.local_index)
-        self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
-        self.peer_list.add(pns)
 
     @transaction
     def _remove_peer_namespace(self, pns):

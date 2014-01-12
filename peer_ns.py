@@ -64,20 +64,17 @@ class PeerNS:
         else:
             self.ctime = time.time()
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
-        return self.user_name
+        return "%s#%s" % (self.user_name, self.id)
 
     def __hash__(self):
         return hash(self.id)
 
     def __cmp__(self, other):
-        if self.id == other.id:
-            return 0
-        elif self.id < other.id:
-            return -1
-        else:
-            return 1
-
+        cmp(self.id, other.id)
 
 '''Test PeerNS class
 try:
