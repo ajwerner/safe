@@ -15,13 +15,15 @@ import boto
 import getpass
 import os
 import random
-from tofu       import tofu
-from safe_device     import SafeDevice
-from OpenSSL    import crypto, SSL
-from X509       import X509, X509Error
-from keychain   import KeyChain
-from os         import path, makedirs
-from boto       import dynamodb2, iam
+from uuid           import uuid4
+from base64         import urlsafe_b64encode
+from tofu           import tofu
+from safe_device    import SafeDevice
+from OpenSSL        import crypto, SSL
+from X509           import X509, X509Error
+from keychain       import KeyChain
+from os             import path, makedirs
+from boto           import dynamodb2, iam
 
 REGION = 'us-east-1'
 
@@ -32,9 +34,12 @@ NS_LIST_PATH    = 'ns_list.json'
 LOG_PATH        = 'log.json'
 KC_PATH         = 'device_keychain.kc'
 
-AWS_USERNAME = 'aws_username'
+AWS_USERNAME   = 'aws_username'
 AWS_ACCESS_KEY = 'aws_access_key_id'
 AWS_SECRET_KEY = 'aws_secret_key_id'
+AWS_CONF_KEYS = (AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY)
+S3_BASE_URL = "http://s3.amazonaws.com"
+S3_DROPBOX_BUCKET = 'safe-dropbox'
 
 def join_namespace(conf):
     """ initiates a tofu connection with another device for this user,
@@ -45,25 +50,23 @@ def join_namespace(conf):
     jabber_id = raw_input("Please enter you gmail username: ")
     jabber_pw = getpass.getpass("Please enter your password: ")
     t = tofu(jabber_id, jabber_pw, jabber_id, tofu_id)
-    t.listen()
+
     conf['aws_conf'] = json.loads(t.receive())
     conf['user_conf'] = json.loads(t.receive())
 
     conf['dev_conf'] = {
         'dev_name': raw_input("Device Name: ").strip(),
-        'dev_id': random.randint(0, 65535)
+        'dev_id': urlsafe_b64encode(uuid4().bytes),
     }
     cert_pem, privkey_pem = create_device_certificates(conf)
     conf['dev_conf']['cert_pem'] = cert_pem
+    
     # Make the keychain
     dev = SafeDevice(**conf['dev_conf'])
-
     dev_json = json.dumps(dev, cls=SafeDevice.ENCODER)
-
     t.send(dev_json)
 
     signed_cert_pem = t.receive()
-    t.disconnect()
     conf['dev_conf']['cert_pem'] = signed_cert_pem
 
     with open(conf['conf_path'], 'w') as conf_file:
@@ -72,18 +75,15 @@ def join_namespace(conf):
 
     kc_password = getpass.getpass("Enter a password for this device's Keychain: ")
     kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
-    kc.write_keychain(signed_cert_pem, privkey_pem)
-    conf['dev_keychain'] = kc
-    conf['dev'] = SafeDevice(**conf['dev_conf'])
+    kc.write_keychain(conf['dev_conf']['cert_pem'], privkey_pem)
+    dev = SafeDevice(**conf['dev_conf'])
+    return dev, kc
 
 def initialize_new_conf(conf):
     """ creates a new configuration file from prompting a user for the fields"""
     # set up dictionaries
-    dev_info = {
-        'dev_name': raw_input("Device Name: ").strip(),
-        'dev_id': random.randint(0, 65535)
-    }
     user_info = {
+        'name': raw_input("User Name: ").strip(),
         'country': raw_input("Country: ").strip(),
         'state': raw_input("State: ").strip(),
         'city': raw_input("City: ").strip(),
@@ -92,26 +92,29 @@ def initialize_new_conf(conf):
     aws_info = {
         AWS_USERNAME: raw_input("AWS Username: ").strip(),
         AWS_ACCESS_KEY: raw_input("AWS Access Key: ").strip(),
-        AWS_SECRET_KEY: raw_input("AWS Secret Key: ").strip()
+        AWS_SECRET_KEY: raw_input("AWS Secret Key: ").strip(),
+    }
+    dev_info = {
+        'dev_name': raw_input("Device Name: ").strip(),
+        'dev_id': urlsafe_b64encode(uuid4().bytes)
     }
     conf.update({
         'dev_conf': dev_info,
         'user_conf': user_info,
         'aws_conf': aws_info
     })
-
     cert_pem, privkey_pem = create_device_certificates(conf)
     conf['dev_conf']['cert_pem'] = cert_pem
     with open(conf['conf_path'], 'w') as conf_file:
         json_string = json.dumps(conf)
         conf_file.write(json_string)
 
-    # Make the keychain
     kc_password = getpass.getpass("Enter a password for this device's Keychain: ")
     kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
-    kc.write_keychain(cert_pem, privkey_pem)
-    conf['dev_keychain'] = kc
-    conf['dev'] = SafeDevice(**conf['dev_conf'])
+    kc.write_keychain(conf['dev_conf']['cert_pem'], privkey_pem)
+
+    dev = SafeDevice(**conf['dev_conf'])
+    return dev, kc
 
 def load_existing_conf(conf):
     """ loads an existing configuration from the configuration path"""
@@ -121,8 +124,8 @@ def load_existing_conf(conf):
     kc_password = getpass.getpass("Enter a password for this device's Keychain: ")
     kc = KeyChain(conf['kc_path'], conf['dev_conf']['dev_name'], kc_password)
     conf['dev_conf']['cert_pem'] = kc.read_keychain()[0]
-    conf['dev_keychain'] = kc
-    conf['dev'] = SafeDevice(**conf['dev_conf'])
+    dev = SafeDevice(**conf['dev_conf'])
+    return dev, kc
 
 def create_device_certificates(conf, signer = None):
     """ 
@@ -151,30 +154,30 @@ def get_config(conf_dir):
     conf['conf_path'] = path.join(conf_dir, CONF_PATH)
     conf['kc_path'] = path.join(conf_dir, KC_PATH)
     conf['log_path'] = path.join(conf_dir, LOG_PATH)
+    dev = None
+    kc = None
     if path.exists(conf['conf_path']):
-        load_existing_conf(conf)    
+        dev, kc = load_existing_conf(conf)    
         if not conf or not conf_is_valid(conf):
             print "Invalid configuration found at %s" % conf['conf_path']
     else:
         print "No existing configuration found at %s" % conf['conf_path']
     
     response = None;
-    while not conf.get('dev_keychain'):
+    while not dev or not kc:
         # prompt the user for a type of setup correctly
         if not response:
-            response = raw_input("Is this the first device on which you've configured Safe? (y/n)")
+            response = raw_input("Is this the first device on which you've configured Safe? (y/n) ")
         else:
             response = raw_input("Please enter 'y' or 'n': ")
         # do the right type of configuration setup
         response_char = response.strip().lower()[0]
         if   (response_char == 'y'):
-            initialize_new_conf(conf)
-            break
+            dev, kc = initialize_new_conf(conf)
         elif (response_char == 'n'):
-            join_namespace(conf)
-            break
-    # init 
-    return conf
+            dev, kc = join_namespace(conf)
+
+    return conf, dev, kc
 
 def conf_is_valid(conf_dict):
     """ Validates the configuration"""

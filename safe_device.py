@@ -55,10 +55,8 @@ class SafeDevice():
     ENCODER = SafeDeviceEncoder
 
     def __init__(self, dev_id=None, dev_name=None, app_obj=None, int_ts=-1, ns_name=None, cert_pem=None):
-        # TODO: audit this class, do we need app_obj, what is ns_name?
+        # TODO: probably do validation here
         self.dev_id = dev_id
-        if self.dev_id < 0 or self.dev_id > 65535:
-            raise DeviceError("Bad Device ID (dev_id="+str(dev_id)+")")
         self.dev_name = dev_name
         self.app_obj = app_obj
         self.ns_name = ns_name
@@ -68,34 +66,17 @@ class SafeDevice():
             self.int_ts = int_ts
         self.cert_pem = cert_pem
 
-    def join_namespace(self, ns_name, connection):
-        dev_json_str = json.dumps(self, cls=SafeDevice.ENCODER)
-        connection.send(dev_json_str)
-        signed_cert_pem = connection.receive()
-        self.cert_pem = signed_cert_pem
-
-    def sync_local_storage(self):
-        if self.ns_name is not None:
-            with open(self._conf['dev_conf'], "w") as json_out:
-                json.dump(self, json_out, cls=SafeDeviceEncoder)
-        else:
-            raise DeviceError("Device "+str(self.dev_id)+" is not in any namespace")
+    def __repr__(self):
+        return str(self)
 
     def __str__(self):
-        return self.dev_name+"#"+str(self.dev_id)+"@"+str(self.int_ts)
+        return self.dev_name+"#"+str(self.dev_id)
 
     def __hash__(self):
-        return self.dev_id
+        return hash(self.dev_id)
 
     def __cmp__(self, other):
-        if self.dev_id < other.dev_id:
-            return -1
-        elif self.dev_id == other.dev_id:
-            # This was put so that we can compare devices by their certificates, it may be a bug
-            return cmp(self.cert_pem, other.cert_pem)
-        else:
-            return 1
-
+        return cmp(self.dev_id, other.dev_id)
 
 '''Test Device class
 
