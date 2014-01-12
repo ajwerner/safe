@@ -21,7 +21,6 @@ import logging
 import copy
 import uuid
 import time
-import wget
 from configuration      import *
 from boto import iam
 from boto import dynamodb
