@@ -281,7 +281,6 @@ class SafeUser(object):
         tofu_connection = tofu(jabber_id, jabber_pw, jabber_id, tofu_id)
         tofu_connection.send(json.dumps(self.conf['aws_conf']))
         tofu_connection.send(json.dumps(self.conf['user_conf']))
-        tofu_connection.listen()
         json_dev_str = tofu_connection.receive()
         dev = json.loads(json_dev_str, cls=SafeDevice.DECODER)
         assert isinstance(dev, SafeDevice)
@@ -295,7 +294,6 @@ class SafeUser(object):
 
         #write the signed certificate dev.cert_pem back to connection
         tofu_connection.send(dev.cert_pem)
-        tofu_connection.disconnect()
         logging.debug("Device Added")
 
     def add_peer(self):
@@ -304,7 +302,6 @@ class SafeUser(object):
         jabber_pw = getpass.getpass("Please enter your password: ")
         other_id = raw_input("Please enter the other user's gmail username: ")
         connection = tofu(jabber_id, jabber_pw, other_id, tofu_id)
-        connection.listen()
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = str(uuid.uuid1())
