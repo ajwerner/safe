@@ -269,13 +269,13 @@ class SafeUser(object):
     def add_peer(self, connection):
         #read namespace info from the connection...
         ns = self.get_peer_namespace()
-        ns.index = uuid.uuid1()
+        ns.remote_index = uuid.uuid1()
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
         connection.listen()
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
-        peer_ns.index = ns.index
+        peer_ns.local_index = ns.remote_index
         #peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
 
@@ -287,14 +287,14 @@ class SafeUser(object):
 
     @transaction
     def _add_peer_namespace(self, pns):
-        self.metadata_keys[pns.index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
+        self.metadata_keys[pns.local_index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
         self.peer_list.add(pns)
         # allow the peer namespace to access the metadata
 
     @transaction
     def _remove_peer_namespace(self, pns):
         self.peer_list.remove(pns)
-        del self.metadata_keys[pns.index]
+        del self.metadata_keys[pns.remote_index]
         # disallow the peer namespace from accessing the metadata
 
     @transaction
