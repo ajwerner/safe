@@ -53,9 +53,11 @@ class PeerNS:
     ENCODER = PeerNSEncoder
     DECODER = PeerNSDecoder
 
-    def __init__(self, ns_id, ns_name, pub_key, ctime=-1):
+    def __init__(self, ns_id, ns_name, pub_key, ctime=-1, remote_index=None, local_index=None):
         if not isinstance(ns_id, int):
             raise PeerNSError("Bad Namespace ID (ns_id="+str(ns_id)+")")
+        self.remote_index = remote_index
+        self.local_index = local_index
         self.ns_id = ns_id
         self.ns_name = ns_name
         self.pub_key = pub_key

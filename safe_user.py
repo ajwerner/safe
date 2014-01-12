@@ -19,6 +19,7 @@ import json
 import boto
 import logging
 import copy
+import uuid
 from configuration      import get_config, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
 from boto import iam
 from boto import dynamodb
@@ -295,9 +296,10 @@ class SafeUser(object):
     def add_peer(self, connection):
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
-        ns.remote_index = uuid.uuid1()
+        ns.remote_index = str(uuid.uuid1())
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
+        print ns_json
         connection.listen()
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
@@ -335,7 +337,7 @@ class SafeUser(object):
         self.metadata[key] = value
 
     def get_peer_user_object(self):
-        x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
+        x509 = X509.load_certificate_from_keychain(self.conf["kc_path"], self.name)
         cert_key = x509.get_PEM_certificate()
         cert = cert_key[0]
         print cert
