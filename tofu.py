@@ -156,6 +156,7 @@ class tofu(object):
 
     def disconnect(self):
         self.connected.clear()
+        self.recv_thread.join()
 
     def send(self, message):
         #BS = 16

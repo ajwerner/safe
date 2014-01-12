@@ -168,7 +168,8 @@ class SafeUser(object):
         if not hasattr(self, "logs") or not self.logs:
             self.logs = [sig,]
         elif sig != self.logs[0]:
-            self.logs[0:0] = sig
+            self.logs = [sig,] + self.logs
+            print self.logs
         serialization['logs'] = json.dumps(self.logs)
         return serialization
 
@@ -325,7 +326,7 @@ class SafeUser(object):
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
-        self.old_identities[0:0] = (self.cert_pem, self.privkey_pem)
+        self.old_identities = [(self.cert_pem, self.privkey_pem),] + self.old_identities
         self._secure_state()
 
     @transaction
