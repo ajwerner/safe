@@ -33,7 +33,6 @@ class tofu(object):
         self.connected = threading.Event()
         self.msg_queue = []
         self.prefix = str(random.randint(1000, 9999))
-        print self.prefix
         DH = DiffieHellman()
 
         self._listen()

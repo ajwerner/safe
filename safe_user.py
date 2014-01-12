@@ -300,7 +300,7 @@ class SafeUser(object):
         jabber_id = raw_input("Please enter you gmail username: ")
         jabber_pw = getpass.getpass("Please enter your password: ")
         other_id = raw_input("Please enter the other user's gmail username: ")
-        tofu_connection = tofu(jabber_id, jabber_pw, other_id)
+        connection = tofu(jabber_id, jabber_pw, other_id)
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = str(uuid.uuid1())
