@@ -358,7 +358,7 @@ class SafeUser(object):
                 metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
                 return AES_decrypt(serialized['metadata'], metadata_key)
         logging.warn("No access to %s info, removing trust relationship")
-        self._remove_peer_namespace(peer_user)
+        self._remove_peer(peer_user)
 
     @transaction
     def _add_device(self, device):
