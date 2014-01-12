@@ -11,6 +11,7 @@ import hashlib
 import getpass
 import threading
 import time
+import random
 from Crypto import Random
 from Crypto.Cipher import AES
 
@@ -42,13 +43,17 @@ class tofu(object):
         self.recv_thread = None
         self.connected = threading.Event()
         self.msg_queue = []
+        self.prefix = str(random.randint(1000, 9999))
 
     def __exit__(self):
         self.connected.clear()
         self.recv_thread.join()
             
     def messageCB(self, conn, msg):
-        msg_body=base64.b64decode(str(msg.getBody()))
+        msg_prefix = msg.getBody()[:len(self.prefix)]
+        if msg_prefix == self.prefix:
+          return
+        msg_body=base64.b64decode(str(msg.getBody()[4:]))
         sender = str(msg.getFrom()).split('/')[0]
         key=hashlib.sha256(self.one_time_pad).digest()
         iv=msg_body[:16]
@@ -88,6 +93,7 @@ class tofu(object):
         obj=AES.new(key, AES.MODE_CBC, iv)
         text=iv+obj.encrypt(text)
         text=base64.encodestring(text)
+        text=self.prefix+text
 
         #jidparams = {}
         #if os.access(os.environ['HOME']+'/.safe_send', os.R_OK):
