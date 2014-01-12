@@ -158,8 +158,9 @@ class tofu(object):
         try:
             while self.connected.is_set():
                 conn.Process(1)
-        except (KeyboardInterrupt, SystemExit):
-            sys.exit()
+        except:
+            self.connected.clear()
+        sys.exit()
     
     def receive(self):
         try:

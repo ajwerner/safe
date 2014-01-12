@@ -20,11 +20,13 @@ import boto
 import logging
 import copy
 import uuid
-from configuration      import get_config, AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY
+import time
+from configuration      import *
 from boto import iam
 from boto import dynamodb
+from datetime import timedelta, datetime
 from boto.dynamodb.exceptions import DynamoDBKeyNotFoundError
-from base64             import b64decode, b64encode
+from base64             import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode
 from OpenSSL            import crypto
 from Crypto             import Random
 from Crypto.Cipher      import AES, PKCS1_OAEP
@@ -77,13 +79,21 @@ class AccountCompromisedException(Exception):
 class SafeUser(object):
     # the keys used to sign and verify the state
     STATE_ATTRS = ['privkey_pem', 'cert_pem', 'old_identities', 'state_keys', 'ns_list', 'dev_list', 
-                  'metadata_keys', 'metadata']
+                  'metadata_keys', 'metadata', 'uid']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
     def __init__(self, conf_dir=".safe_config"):
-        self.conf = get_config(conf_dir)
+        conf, dev, dev_kc = get_config(conf_dir)
+        self.conf = conf
+        self.dev = dev
+        self.dev_kc = dev_kc
         self.name = self.conf['aws_conf'][AWS_USERNAME]
-        self._init_aws()
+
+        # if you can't get in once, see if somebody left you some keys in an S3 bucket
+        if not self._init_aws():
+            self._fetch_aws_conf_from_S3()
+            if not self._init_aws(): # you tried getting new keys but you're still locked out!
+                raise Exception("This device appears to have been removed :-(")
         self._reconcile_state()
 
     def _init_aws(self):
@@ -95,9 +105,76 @@ class SafeUser(object):
         aws_conf = self.conf["aws_conf"]
         self.dynamo = boto.connect_dynamodb(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
         self.iam = boto.connect_iam(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
-        response = self.iam.get_user()
-        user = response['get_user_response']['get_user_result']['user']
+        self.s3 = boto.connect_s3(aws_conf[AWS_ACCESS_KEY], aws_conf[AWS_SECRET_KEY])
+        # will fail if you don't have credentials anymore
+        try:
+            user_response = self.iam.get_user()
+            access_keys_response = self.iam.get_all_access_keys(self.conf['aws_conf'][AWS_USERNAME])
+        except:
+            return False
+        
+        # make sure there's only one access key otherwise you can't remove devices and that's bad
+        access_keys = access_keys_response\
+['list_access_keys_response']['list_access_keys_result']['access_key_metadata']
+        if len(access_keys) != 1:
+            raise AccountCompromisedException(\
+"This account cannot remove devices because an extra set of AWS keys have been created!")
+        user = user_response['get_user_response']['get_user_result']['user']
         self.id = user['user_id']
+        return True
+
+    def _close_aws(self):
+        self.iam.close()
+        self.s3.close()
+
+    def _fetch_aws_conf_from_S3(self):
+        """
+        here we're trying to find AWS credentials that were left for 
+        """
+        today = datetime.today()
+        bucket = self.s3.get_bucket(S3_DROPBOX_BUCKET)
+        for i in range(1, -11, -1):
+            day = today + timedelta(days=i)
+            key_str = urlsafe_b64encode(hashlib.sha256(day.strftime("%d/%m/%Y") + dev.dev_id).digest())
+            key = bucket.get_key(key_str)
+            if not key:
+                continue
+            json_str = key.get_contents_as_string()
+            credentials_dict = json.dumps(json_str)
+            if not credentials_dict.get('key') and credentials_dict.get('contents'):
+                raise Exception("Invalid credentials dictionary")
+            dev_privkey_pem = self.dev_kc.read_keychain()[1]
+            aes_key = decrypt_with_privkey(dev_privkey_pem, b64decode(credentials_dict['key']))
+            new_aws_conf = json.loads(AES_decrypt(credentials_dict['contents'], aes_key))
+            if not all(key in AWS_CONF_KEYS for key in new_aws_conf):
+                raise Exception("Not a valid aws_conf")
+            self.conf['aws_conf'] = new_aws_conf
+            with open(self.conf['conf_path'], 'w') as conf_file:
+                json_string = json.dumps(self.conf)
+                conf_file.write(json_string)
+            return
+        raise Exception("No valid credentials found for this device")
+
+    def _initialize_state(self, namespace_table):
+        """ 
+        Sets up the user object with the initial values. 
+            this function is called when the no database key exists for the user
+        """
+        # Initial remote serialization creation
+        self.uid = b64encode(uuid4().bytes)
+        self.peer_list = SafeList("", cls=PeerNS)
+        self.dev_list = SafeList("", cls=SafeDevice)
+        self.dev_list.add(self.dev)
+        self.old_identities = []
+        # set up the security on this state
+        self._secure_state()
+        self.metadata = {'cert_pem': self.cert_pem, 'name': self.name, 'email': self.conf['user_conf']['email']}
+        # create the state object in AWS
+        self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
+        self.serialized.put()
+        # rereconcile because we just changed the remote state
+        self._reconcile_state()
+        return
 
     def _secure_state(self):
         """ 
@@ -106,13 +183,6 @@ class SafeUser(object):
         requires that the device list be instantiated and non-empty
         will set the values for state_keys, state_key, cert_pem, and privkey_pem
         """
-        # Initial remote serialization creation
-        self.peer_list = SafeList("", cls=PeerNS)
-        self.dev_list = SafeList("", cls=SafeDevice)
-        self.dev_list.add(self.conf['dev'])
-        self.state_key = Random.new().read(32)
-        # TODO: fix this indexing
-        self.state_keys = {self.conf['dev'].dev_id: b64encode(self.conf['dev_keychain'].encrypt(self.state_key))}
         # make a new keypair for the namespace
         pkey = crypto.PKey()
         pkey.generate_key(crypto.TYPE_RSA, 1024)
@@ -127,28 +197,22 @@ class SafeUser(object):
         self.cert_pem = rec[0]
         self.privkey_pem  = rec[1]
 
-    def _initialize_state(self, namespace_table):
-        """ 
-        Sets up the user object with the initial values. 
-            this function is called when the no database key exists for the user
-        """
-        # Initial remote serialization creation
-        self.peer_list = SafeList("", cls=PeerNS)
-        self.dev_list = SafeList("", cls=SafeDevice)
-        self.dev_list.add(self.conf['dev'])
-        self.old_identities = []
-        # set up the security on this state
-        self._secure_state()
-        # set up the metadata
-        self.metadata = {'cert_pem': self.cert_pem, 'name': self.name, 'email': self.conf['user_conf']['email']}
+        # set up the state keys
+        self.state_key = Random.new().read(32)
+        self.state_keys = {}
+        for dev in self.get_dev_list():
+            self.state_keys[dev.dev_id] = b64encode(encrypt_with_cert(dev.cert_pem, self.state_key))
+        self._secure_metadata()
+
+    def _secure_metadata(self):
         self.metadata_key = Random.new().read(32)
-        self.metadata_keys = {self.id: b64encode(encrypt_with_cert(self.cert_pem, self.metadata_key))}
-        # create the state object in AWS
-        self.serialized = namespace_table.new_item(hash_key=self.id, attrs=self.serialize())
-        self.serialized.put()
-        # rereconcile because we just changed the remote state
-        self._reconcile_state()
-        return
+        self.metadata_keys = {}
+        for peer in self.get_peer_list():
+            index = b64encode(hashlib.sha256(peer.cert_pem + peer.local_index).digest())
+            self.metadata_keys[index] = b64encode(encrypt_with_cert(peer.cert_pem, self.metadata_key))
+        # be careful about these 
+        my_index = b64encode(hashlib.sha256(self.cert_pem + self.uid).digest())
+        self.metadata_keys[my_index] = b64encode(encrypt_with_cert(self.cert_pem, self.metadata_key))
 
     def serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
@@ -161,6 +225,7 @@ class SafeUser(object):
             'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
             'metadata_keys': json.dumps(self.metadata_keys),
             'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
+            'uid': AES_encrypt(self.uid, self.state_key),
         }
         # sign this serialization and add it to the state logs
         to_be_signed = json.dumps([key for key, value in sorted(serialization.items()) if key in SafeUser.STATE_ATTRS])
@@ -169,7 +234,6 @@ class SafeUser(object):
             self.logs = [sig,]
         elif sig != self.logs[0]:
             self.logs = [sig,] + self.logs
-            print self.logs
         serialization['logs'] = json.dumps(self.logs)
         return serialization
 
@@ -197,11 +261,11 @@ class SafeUser(object):
 
         # Get the state_key
         self.state_keys = json.loads(self.serialized['state_keys'])
-        if str(self.conf['dev'].dev_id) not in self.state_keys:
+        if str(self.dev.dev_id) not in self.state_keys:
             raise KeyError("Local device ID not found in keys")
         else:
-            state_key = b64decode(self.state_keys[str(self.conf['dev'].dev_id)])
-            self.state_key = self.conf['dev_keychain'].decrypt(state_key)
+            state_key = b64decode(self.state_keys[str(self.dev.dev_id)])
+            self.state_key = self.dev_kc.decrypt(state_key)
 
         # Get the namespace keys
         self.cert_pem = AES_decrypt(self.serialized['cert_pem'], self.state_key)
@@ -220,7 +284,7 @@ class SafeUser(object):
             raise AccountCompromisedException("It appears that the SafeUser state has not been properly signed!")
         self.logs = logs
         self._write_logs()
-        self.old_identities = AES_decrypt(self.serialized['old_identities'], self.state_key)
+        self.old_identities = json.loads(AES_decrypt(self.serialized['old_identities'], self.state_key))
 
         # Get the peer ns list
         dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)
@@ -236,12 +300,16 @@ class SafeUser(object):
         else:
             self.dev_list = SafeList(dec_dev_list, SafeDevice)
 
+        # get the uid
+        self.uid = AES_decrypt(self.serialized['uid'], self.state_key)
+
         # get the metadata
         self.metadata_keys = json.loads(self.serialized['metadata_keys'])
-        if self.id not in self.metadata_keys:
+        index = b64encode(hashlib.sha256(self.cert_pem+self.uid).digest())
+        if index not in self.metadata_keys:
             raise KeyError("Namespace does not have access to its own metadata!")
         else:
-            metadata_key = b64decode(self.metadata_keys[self.id])
+            metadata_key = b64decode(self.metadata_keys[index])
             self.metadata_key = decrypt_with_privkey(self.privkey_pem, metadata_key)
 
         self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
@@ -255,12 +323,12 @@ class SafeUser(object):
         namespace_table = self.dynamo.get_table('namespaces')
         serialized = namespace_table.get_item(hash_key=peer_user.id)
         metadata_keys = json.loads(serialized['metadata_keys'])
-        index = b64encode(encrypt_with_cert(self.cert_pem, peer_user.remote_index))
+        index = b64encode(hashlib.sha256(self.cert_pem + peer_user.remote_index).digest())
         if index in metadata_keys:
             metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
             return AES_decrypt(serialized['metadata'], metadata_key)
         for (cert_pem, privkey) in self.old_identities:
-            index = b64encode(encrypt_with_cert(cert_pem, peer_user.remote_index))
+            index = b64encode(hashlib.sha256(cert_pem + peer_user.remote_index).digest())
             if index in metadata_keys:
                 logging.warn("Using old identity to access %s info" % peer_user.ns_name)
                 metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
@@ -279,6 +347,7 @@ class SafeUser(object):
         jabber_id = raw_input("Please enter you gmail username: ")
         jabber_pw = getpass.getpass("Please enter your password: ")
         tofu_connection = tofu(jabber_id, jabber_pw, jabber_id, tofu_id)
+
         tofu_connection.send(json.dumps(self.conf['aws_conf']))
         tofu_connection.send(json.dumps(self.conf['user_conf']))
         json_dev_str = tofu_connection.receive()
@@ -297,46 +366,85 @@ class SafeUser(object):
         logging.debug("Device Added")
 
     def add_peer(self):
-        tofu_id = raw_input("Enter a code for this connection: ")
         jabber_id = raw_input("Please enter you gmail username: ")
         jabber_pw = getpass.getpass("Please enter your password: ")
         other_id = raw_input("Please enter the other user's gmail username: ")
+        tofu_id = raw_input("Enter a connection code (just make sure it's the same on both devices): ")
         connection = tofu(jabber_id, jabber_pw, other_id, tofu_id)
-        #read namespace info from the connection...
+        # read namespace info from the connection...
         ns = self.get_peer_user_object()
-        ns.remote_index = str(uuid.uuid1())
+        ns.remote_index = b64encode(uuid.uuid4().bytes)
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
-        print ns_json
         connection.send(ns_json)
         peer_ns_json = connection.receive()
-        print peer_ns_json
         peer_ns = PeerNS(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
-        #peer_ns_cert_pem = peer_ns.pub_key
+        # peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
 
+    def get_dev_list(self):
+        return self.dev_list.get_list()
+
+    def get_peer_list(self):
+        return self.peer_list.get_list()
+
     def remove_device(self, device):
+        if self.dev == device:
+            raise Exception("you can't remove yourself")
         self._remove_device(device)
-        # remove credentials
+
+        # get new access keys, and them in the dropbox for everybody
+        new_access_keys_response = self.iam.create_access_key(self.conf['aws_conf'][AWS_USERNAME])
+        access_keys_dict = new_access_keys_response['create_access_key_response']['create_access_key_result']['access_key']
+        new_aws_conf = {
+            AWS_USERNAME: access_keys_dict['user_name'],
+            AWS_ACCESS_KEY: access_keys_dict['access_key_id'],
+            AWS_SECRET_KEY: access_keys_dict['secret_access_key']
+        }
+        
+        aes_key = Random.new().read(32)
+        enc_aws_conf = AES_encrypt(json.dumps(new_aws_conf), aes_key)
+
+        bucket = self.s3.get_bucket(S3_DROPBOX_BUCKET)
+        for dev in self.get_dev_list():
+            key_str = urlsafe_b64encode(hashlib.sha256(time.strftime("%d/%m/%Y") + dev.dev_id).digest())
+            key = bucket.new_key(key_str)
+            contents = {"key": b64encode(encrypt_with_cert(dev.cert_pem, aes_key)), 
+                        "contents": enc_aws_conf}
+            key.set_contents_from_string(json.dumps(contents))
+            key.set_acl('public-read')
+
+        old_aws_conf = self.conf['aws_conf']
+        self.conf['aws_conf'] = new_aws_conf
+        # write the configuration
+        with open(self.conf['conf_path'], 'w') as conf_file:
+            json_string = json.dumps(self.conf)
+            conf_file.write(json_string)
+        self.iam.delete_access_key(old_aws_conf[AWS_ACCESS_KEY])
+        self._init_aws()
+
+        # remove old key
         # inform the other peers of the removal
 
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
-        self.old_identities = [(self.cert_pem, self.privkey_pem),] + self.old_identities
+        if self.old_identities:
+            self.old_identities = [(self.cert_pem, self.privkey_pem)] + self.old_identities
+        else:
+            self.old_identities = [(self.cert_pem, self.privkey_pem)]
         self._secure_state()
 
     @transaction
     def _add_peer_namespace(self, pns):
-        index = b64encode(encrypt_with_cert(pns.cert_pem, pns.local_index))
+        index = hashlib.sha256(pns.cert_pem + pns.local_index)
         self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
         self.peer_list.add(pns)
 
     @transaction
     def _remove_peer_namespace(self, pns):
         self.peer_list.remove(pns)
-        index = b64encode(encrypt_with_cert(pns.local_index, self.metadata_key))
-        del self.metadata_keys[index]
+        self._secure_metadata()
 
     @transaction
     def update_metadata_key(self, key, value):
