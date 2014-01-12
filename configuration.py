@@ -38,6 +38,7 @@ AWS_USERNAME   = 'aws_username'
 AWS_ACCESS_KEY = 'aws_access_key_id'
 AWS_SECRET_KEY = 'aws_secret_key_id'
 AWS_CONF_KEYS = (AWS_USERNAME, AWS_ACCESS_KEY, AWS_SECRET_KEY)
+S3_BASE_URL = "http://s3.amazonaws.com"
 S3_DROPBOX_BUCKET = 'safe-dropbox'
 
 def join_namespace(conf):

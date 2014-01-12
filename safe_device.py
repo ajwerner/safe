@@ -66,8 +66,11 @@ class SafeDevice():
             self.int_ts = int_ts
         self.cert_pem = cert_pem
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
-        return self.dev_name+"#"+str(self.dev_id)+"@"+str(self.int_ts)
+        return self.dev_name+"#"+str(self.dev_id)
 
     def __hash__(self):
         return hash(self.dev_id)

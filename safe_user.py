@@ -21,6 +21,7 @@ import logging
 import copy
 import uuid
 import time
+import wget
 from configuration      import *
 from boto import iam
 from boto import dynamodb
@@ -32,7 +33,7 @@ from Crypto             import Random
 from Crypto.Cipher      import AES, PKCS1_OAEP
 from Crypto.PublicKey   import RSA
 from Crypto.Hash.SHA256 import SHA256Hash
-
+from urllib2       import urlopen, HTTPError
 from tofu          import *
 from safe_list     import SafeList
 from safe_device   import SafeDevice
@@ -132,15 +133,16 @@ class SafeUser(object):
         here we're trying to find AWS credentials that were left for 
         """
         today = datetime.today()
-        bucket = self.s3.get_bucket(S3_DROPBOX_BUCKET)
         for i in range(1, -11, -1):
             day = today + timedelta(days=i)
-            key_str = urlsafe_b64encode(hashlib.sha256(day.strftime("%d/%m/%Y") + dev.dev_id).digest())
-            key = bucket.get_key(key_str)
-            if not key:
+            key_str = urlsafe_b64encode(hashlib.sha256(day.strftime("%d/%m/%Y") + self.dev.dev_id).digest())
+            url = '/'.join([S3_BASE_URL, S3_DROPBOX_BUCKET, key_str])
+            response = None
+            try:
+                response = urlopen(url).read()
+            except HTTPError:
                 continue
-            json_str = key.get_contents_as_string()
-            credentials_dict = json.dumps(json_str)
+            credentials_dict = json.loads(response)
             if not credentials_dict.get('key') and credentials_dict.get('contents'):
                 raise Exception("Invalid credentials dictionary")
             dev_privkey_pem = self.dev_kc.read_keychain()[1]
@@ -152,6 +154,7 @@ class SafeUser(object):
             with open(self.conf['conf_path'], 'w') as conf_file:
                 json_string = json.dumps(self.conf)
                 conf_file.write(json_string)
+            self._init_aws()
             return
         raise Exception("No valid credentials found for this device")
 
