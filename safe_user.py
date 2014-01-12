@@ -73,7 +73,7 @@ class AccountCompromisedException(Exception):
 class SafeUser(object):
     # the keys used to sign and verify the state
     STATE_KEYS = ['privkey_pem', 'cert_pem', 'state_keys', 'ns_list', 'dev_list', 'metadata_keys', 'metadata']
-    PROTECTED_METADATA_KEYS = ['cert_pem', 'ns_name', 'email']
+    PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
     def __init__(self, conf_dir=".safe_config"):
         self.conf = get_config(conf_dir)
@@ -267,12 +267,16 @@ class SafeUser(object):
     def add_peer(self, connection):
         #read namespace info from the connection...
         ns = self.get_peer_namespace()
+        ns.index = uuid.uuid1()
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
+        connection.listen()
         peer_ns_json = connection.receive()
         peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
-        peer_ns_cert_pem = peer_ns.pub_key
+        peer_ns.index = ns.index
+        #peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
+
 
     @transaction
     def _remove_device(self, device):
@@ -281,14 +285,14 @@ class SafeUser(object):
 
     @transaction
     def _add_peer_namespace(self, pns):
-        self.metadata_keys[psn.ns_id] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
+        self.metadata_keys[pns.index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
         self.peer_list.add(pns)
         # allow the peer namespace to access the metadata
 
     @transaction
     def _remove_peer_namespace(self, pns):
         self.peer_list.remove(pns)
-        del self.metadata_keys[pns.ns_id]
+        del self.metadata_keys[pns.index]
         # disallow the peer namespace from accessing the metadata
 
     @transaction
@@ -304,3 +308,4 @@ class SafeUser(object):
         print cert
         self_ns = PeerNS(0, self.name, cert) 
         return self_ns
+
