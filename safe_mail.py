@@ -37,6 +37,9 @@ class safe_mail(object):
     server.sendmail(account+"@gmail.com", receiver, text)
 
   def receive(self):
+
+    num = raw_input("Please enter how many email you wish to receive")
+    
     mail = imaplib.IMAP4_SSL('imap.gmail.com')
     mail.login(raw_input("Account: "), getpass.getpass())
     
@@ -49,7 +52,7 @@ class safe_mail(object):
 
     count = 1
     #iterate messages through descending order
-    for i in range( latest_email_id, latest_email_id-2, -1 ):
+    for i in range( latest_email_id, latest_email_id-num, -1 ):
         typ, data = mail.fetch( i, '(RFC822)' ) 
         for response_part in data:
             if isinstance(response_part, tuple):
@@ -67,3 +70,4 @@ class safe_mail(object):
     mail.close()
     mail.logout() 
 
+  def list_peer()
