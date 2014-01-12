@@ -303,12 +303,13 @@ class SafeUser(object):
         jabber_pw = getpass.getpass("Please enter your password: ")
         other_id = raw_input("Please enter the other user's gmail username: ")
         connection = tofu(jabber_id, jabber_pw, other_id, tofu_id)
+        connection.listen()
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = str(uuid.uuid1())
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
+        print ns_json
         connection.send(ns_json)
-        connection.listen()
         peer_ns_json = connection.receive()
         print peer_ns_json
         peer_ns = PeerNS(**json.loads(peer_ns_json))
