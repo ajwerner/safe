@@ -120,10 +120,12 @@ class SafeUser(object):
         user = response['get_user_response']['get_user_result']['user']
         self.id = user['user_id']
 
-    def _initialize_state(self, namespace_table):
+    def _secure_state(self):
         """ 
-        Sets up the user object with the initial values. 
-            this function is called when the no database key exists for the user
+        creates a new X509 certificate and state key and sets up the state keys 
+
+        requires that the device list be instantiated and non-empty
+        will set the values for state_keys, state_key, cert_pem, and privkey_pem
         """
         # Initial remote serialization creation
         self.peer_list = SafeList("", cls=PeerNS)
@@ -145,6 +147,18 @@ class SafeUser(object):
         rec = x509.get_PEM_certificate()
         self.cert_pem = rec[0]
         self.privkey_pem  = rec[1]
+
+    def _initialize_state(self, namespace_table):
+        """ 
+        Sets up the user object with the initial values. 
+            this function is called when the no database key exists for the user
+        """
+        # Initial remote serialization creation
+        self.peer_list = SafeList("", cls=PeerNS)
+        self.dev_list = SafeList("", cls=SafeDevice)
+        self.dev_list.add(self.conf['dev'])
+        # set up the security on this state
+        self._secure_state()
         # set up the metadata
         self.metadata = {'cert_pem': self.cert_pem, 'name': self.name, 'email': self.conf['user_conf']['email']}
         self.metadata_key = Random.new().read(32)
@@ -268,7 +282,7 @@ class SafeUser(object):
 
     def add_peer(self, connection):
         #read namespace info from the connection...
-        ns = self.get_peer_namespace()
+        ns = self.get_peer_user_object()
         ns.remote_index = uuid.uuid1()
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
@@ -279,15 +293,16 @@ class SafeUser(object):
         #peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
 
-
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
+        self._secure_state()
         del self.keys[device.dev_id]
 
     @transaction
     def _add_peer_namespace(self, pns):
-        self.metadata_keys[pns.local_index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
+        index = b64encode(encrypt_with_cert(pns.local_index, self.metadata_key))
+        self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
         self.peer_list.add(pns)
         # allow the peer namespace to access the metadata
 
@@ -303,7 +318,7 @@ class SafeUser(object):
             raise Exception("Cannot update %s in metadata, it is a protected key" % key)
         self.metadata[key] = value
 
-    def get_peer_namespace(self):
+    def get_peer_user_object(self):
         x509 = X509.load_certificate_from_keychain(self.keychain_path, self.name)
         cert_key = x509.get_PEM_certificate()
         cert = cert_key[0]
