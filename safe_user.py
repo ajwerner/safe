@@ -468,9 +468,12 @@ class SafeUser(object):
             self.old_identities = [(self.cert_pem, self.privkey_pem)]
         self._secure_state()
 
+    def remove_peer(self, peer):
+        self._remove_peer(peer)
+
     @transaction
-    def _remove_peer_namespace(self, pns):
-        self.peer_list.remove(pns)
+    def _remove_peer(self, peer):
+        self.peer_list.remove(peer)
         self._secure_metadata()
 
     @transaction

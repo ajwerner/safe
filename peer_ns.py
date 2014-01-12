@@ -74,7 +74,7 @@ class PeerNS:
         return hash(self.id)
 
     def __cmp__(self, other):
-        cmp(self.id, other.id)
+        return cmp(self.id, other.id)
 
 '''Test PeerNS class
 try:
