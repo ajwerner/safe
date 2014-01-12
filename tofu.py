@@ -14,48 +14,125 @@ import time
 import random
 from Crypto import Random
 from Crypto.Cipher import AES
+from diffie_hellman import *
 
 #handles padding before encryption and unpadding after decryption
 BS=16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[0:-ord(s[-1])]
 
+"""
 def input_callback():
     j_id = raw_input("User ID: ")#+"@is-a-furry.org"
     j_pwd = getpass.getpass("Password: ")
     rcpt = raw_input("To: ")#+"@is-a-furry.org"
     nonce = raw_input("Enter Nonce: ")
     return {'j_id':j_id, 'j_pwd':j_pwd, 'rcpt':rcpt, 'nonce':nonce}
+"""
 
 class tofu(object):
  
-    #flag = 1
-    #enc=''
+    def __init__(self, j_id, j_pwd, receiver):
+        self.j_id= j_id
+        self.j_pwd= j_pwd
+        self.receiver= receiver
 
-#  def __init__(self, one_time_pad, j_id, j_pwd, receiver):
-    def __init__(self, f):
-        rec = f()
-        self.one_time_pad = rec['nonce']
-        self.j_id= rec['j_id']
-        self.j_pwd= rec['j_pwd']
-        self.receiver= rec['rcpt']
         self.enc=''
         self.recv_thread = None
         self.connected = threading.Event()
         self.msg_queue = []
         self.prefix = str(random.randint(1000, 9999))
+       
+        self.DH = DiffieHellman()
+        self._send(self.DH.publicKey)
+        self._listen()
+        receiver_pubKey = self._receive()
 
+        DH.genKey(receiver.pubKey)
+        self.secret_value = DH.getKey()
+        
+
+
+        disconnect(self)
+    
+    def _send(self, message):
+        tojid = self.receiver
+        text = self.prefix+hex(message)
+        jid = xmpp.protocol.JID(self.j_id)
+        cl = xmpp.Client(jid.getDomain(), debug=[])
+
+        try:
+            con = cl.connect(server=('talk.google.com', 5222))
+        except IOError as e:
+            print e
+        if not con:
+            print 'could not connect!'
+            sys.exit()
+        auth = cl.auth(jid.getNode(), self.j_pwd,
+                resource = jid.getResource())
+        if not auth:
+            print 'could not authenticate!'
+            sys.exit()
+
+        cl.send(xmpp.protocol.Message(tojid, text))
+
+
+    def _receive(self):
+        try:
+            if not self.connected.is_set():
+              return
+            while not self.msg_queue:
+              pass
+            return self.msg_queue.pop(0)
+        except (KeyboardInterrupt, SystemExit):
+            sys.exit()
+
+    def _listen(self):
+        if self.connected.isSet():
+            return
+        
+        jid = xmpp.protocol.JID(self.j_id)
+        cl = xmpp.Client(jid.getDomain(), debug=[])
+
+        con = cl.connect(server=('talk.google.com', 5222))
+        if not con:
+            raise Exception("could not connect to server")
+        auth = cl.auth(jid.getNode(), self.j_pwd,
+              resource = jid.getResource())
+        if not auth:
+          raise Exception("could not authenticate jabber account %s!"
+              % self.j_id)
+        
+        cl.sendInitPresence(requestRoster = 0)
+        cl.RegisterHandler('message', self._messageCB)
+        self.connected.set()
+        self.recv_thread = threading.Thread(target = self.GoOn, args = (cl,))
+        self.recv_thread.daemon = True
+        self.recv_thread.start()
+
+        return
+
+    
     def __exit__(self):
         self.connected.clear()
         self.recv_thread.join()
             
+    
+    
+    def _messageCB(self, conn, msg):
+        msg_prefix = msg.getBody()[:len(self.prefix)]
+        if msg_prefix == self.prefix:
+            return
+        sender = str(msg.getFrom()).split('/')[0]
+        self.msg_queue.append(msg) 
+    
     def messageCB(self, conn, msg):
         msg_prefix = msg.getBody()[:len(self.prefix)]
         if msg_prefix == self.prefix:
           return
         msg_body=base64.b64decode(str(msg.getBody()[4:]))
         sender = str(msg.getFrom()).split('/')[0]
-        key=hashlib.sha256(self.one_time_pad).digest()
+        key=hashlib.sha256(self.secret_value).digest()
         iv=msg_body[:16]
         cipher = AES.new(key, AES.MODE_CBC, iv)
         msg=unpad(cipher.decrypt(msg_body[16:]))
@@ -85,31 +162,17 @@ class tofu(object):
         #BS = 16
         #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
         tojid=self.receiver
+        
 
         #padding the message and encrypting it
         text=pad(message)
-        key=hashlib.sha256(self.one_time_pad).digest()
+        key=hashlib.sha256(self.secret_value).digest()
         iv = Random.new().read(AES.block_size)
         obj=AES.new(key, AES.MODE_CBC, iv)
         text=iv+obj.encrypt(text)
         text=base64.encodestring(text)
         text=self.prefix+text
 
-        #jidparams = {}
-        #if os.access(os.environ['HOME']+'/.safe_send', os.R_OK):
-            #for ln in open(os.environ['HOME']+'/.safe_send').readlines():
-                #if not ln[0] in ('#', ';'):
-                    #key, val = ln.strip().split('=',1)
-                    #jidparams[key.lower()]=val
-
-        #for mandatory in ['jid', 'password']:
-            #if mandatory not in jidparams.keys():
-                #open(os.environ['HOME']+'/.safe_send',
-                        #'w').write('JID=safe_device1@is-a-furry.org\nPASSWORD=safepassword\n')
-                #print 'please point ~/.safe_send config file to valid JID for sending messages.'
-                #sys.exit(0)
-
-        #jid = xmpp.protocol.JID(jidparams['jid'])
         jid = xmpp.protocol.JID(self.j_id)
         cl = xmpp.Client(jid.getDomain(), debug=[])
 
@@ -131,53 +194,35 @@ class tofu(object):
         cl.send(xmpp.protocol.Message(tojid,text))
         #cl.disconnect()
 
-    def listen(self):
-        
+    
+    def listen(self): 
 
-        #jidparams={}
-        #if os.access(os.environ['HOME']+'/.safe_receive', os.R_OK):
-            #for ln in open(os.environ['HOME']+'/.safe_receive').readlines():
-                #if not ln[0] in ('#', ';'):
-                    #key,val=ln.strip().split('=',1)
-                    #jidparams[key.lower()]=val
-        #for mandatory in ['jid', 'password']:
-            #if mandatory not in jidparams.keys():
-                #open(os.environ['HOME']+'/.safe_receive','w').write('JID=safe_device2@is-a-furry.org\nPASSWORD=safepassword\n')
-                #print 'Please point ~/.safe_receive config file to valid JID receiving messages'
-                #sys.exit(0)
-
-        #jid=xmpp.protocol.JID(jidparams['jid'])
-        if self.connected.isSet():
+       if self.connected.isSet():
             return
 
-        jid=xmpp.protocol.JID(self.j_id)
-        cl=xmpp.Client(jid.getDomain(),debug=[])
+       jid=xmpp.protocol.JID(self.j_id)
+       cl=xmpp.Client(jid.getDomain(),debug=[])
 
-        con=cl.connect(server=('talk.google.com', 5222))
-        if not con:
-            raise Exception("could not connect to server")
-        #print 'connected with', con
-        auth=cl.auth(jid.getNode(), self.j_pwd,
-            resource=jid.getResource())
-        if not auth:
-            raise Exception("could not authenticate jabber account %s!" % self.j_id)
-        #print 'authenticated using', auth
+       con=cl.connect(server=('talk.google.com', 5222))
+       if not con:
+          raise Exception("could not connect to server")
+       #print 'connected with', con
+       auth=cl.auth(jid.getNode(), self.j_pwd,
+       resource=jid.getResource())
+       if not auth:
+          raise Exception("could not authenticate jabber account %s!" % self.j_id)
+       #print 'authenticated using', auth
 
-        cl.sendInitPresence(requestRoster=0)
+       cl.sendInitPresence(requestRoster=0)
 
-        cl.RegisterHandler('message', self.messageCB)
+       cl.RegisterHandler('message', self.messageCB)
 
-        self.connected.set()
-        self.recv_thread = threading.Thread(target=self.GoOn, args=(cl,))
-        self.recv_thread.daemon = True
-        self.recv_thread.start()
+       self.connected.set()
+       self.recv_thread = threading.Thread(target=self.GoOn, args=(cl,))
+       self.recv_thread.daemon = True
+       self.recv_thread.start()
 
-        return
-        #unpad = lambda s : s[0:-ord(s[-1])]
-
-
-        #time.sleep(1)
-
-        return shared_key
-
+       return
+        
+        
     
