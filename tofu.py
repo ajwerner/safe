@@ -130,6 +130,7 @@ class tofu(object):
             self.condition.notify()
             self.condition.release()
         else:
+            print body
             body = base64.b64decode(body)
             key=hashlib.sha256(self.secret_value).digest()
             iv=body[:AES.block_size]
@@ -188,7 +189,6 @@ class tofu(object):
         obj=AES.new(key, AES.MODE_CFB, iv)
         text=iv+obj.encrypt(message)
         text=base64.encodestring(text)
-        text=self.id+self.prefix+text
         self._send(text)
         # jid = xmpp.protocol.JID(self.j_id)
         # cl = xmpp.Client(jid.getDomain(), debug=[])
