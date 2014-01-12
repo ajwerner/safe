@@ -329,7 +329,7 @@ class SafeUser(object):
 
     @transaction
     def _add_peer_namespace(self, pns):
-        index = b64encode(encrypt_with_cert(pns.cert_pem, self.local_index))
+        index = b64encode(encrypt_with_cert(pns.cert_pem, pns.local_index))
         self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
         self.peer_list.add(pns)
 

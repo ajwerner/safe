@@ -126,7 +126,6 @@ class tofu(object):
             return
         if hasattr(self, "first_message") and msg.getBody() == self.first_message:
             return
-        import ipdb; ipdb.set_trace()
         msg_body = msg.getBody()[len(self.id) + PREFIX_LEN:]
         if msg_body == self.first_message:
             return
