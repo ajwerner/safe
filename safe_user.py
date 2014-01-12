@@ -45,6 +45,8 @@ NUM_RETRIES = 5 # number of times to retry a transaction
 def transaction(f):
     def wrapped(*args, **kwargs):
         self = args[0]
+        assert(isinstance(self, SafeUser))
+        self._reconcile_state()
         committed = False
         retries_left = num_retries = NUM_RETRIES
         while not committed and retries_left:
@@ -60,7 +62,8 @@ def transaction(f):
 
         if not committed:
             # TODO: better excpetion
-            raise Exception("Failed to commit change after %d attempts" % (num_retries,)) 
+            raise Exception("Failed to commit change after %d attempts" % (num_retries,))
+        self._write_logs()
     return wrapped
 
 class AccountCompromisedException(Exception):
@@ -72,7 +75,8 @@ class AccountCompromisedException(Exception):
 
 class SafeUser(object):
     # the keys used to sign and verify the state
-    STATE_KEYS = ['privkey_pem', 'cert_pem', 'state_keys', 'ns_list', 'dev_list', 'metadata_keys', 'metadata']
+    STATE_ATTRS = ['privkey_pem', 'cert_pem', 'old_identities', 'state_keys', 'ns_list', 'dev_list', 
+                  'metadata_keys', 'metadata']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
     def __init__(self, conf_dir=".safe_config"):
@@ -80,32 +84,6 @@ class SafeUser(object):
         self.name = self.conf['aws_conf'][AWS_USERNAME]
         self._init_aws()
         self._reconcile_state()
-
-    @transaction
-    def _add_device(self, device):
-        self.dev_list.add(device)
-        self.state_keys[device.dev_id] = b64encode(encrypt_with_cert(device.cert_pem, self.state_key))
-
-    def add_device(self, tofu_connection):
-        #read the device out from the connection...
-        tofu_connection.send(json.dumps(self.conf['aws_conf']))
-        tofu_connection.send(json.dumps(self.conf['user_conf']))
-        tofu_connection.listen()
-        json_dev_str = tofu_connection.receive()
-        dev = json.loads(json_dev_str, cls=SafeDevice.DECODER)
-        assert isinstance(dev, SafeDevice)
-
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
-        privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
-        dev_x509 = X509.load_certifacate_from_PEM(dev.cert_pem)
-        dev_x509.sign_certificate(cert, privkey)
-        dev.cert_pem = dev_x509.get_PEM_certificate()[0]
-        self._add_device(dev)
-
-        #write the signed certificate dev.cert_pem back to connection
-        tofu_connection.send(dev.cert_pem)
-        tofu_connection.disconnect()
-        logging.debug("Device Added")
 
     def _init_aws(self):
         """
@@ -157,6 +135,7 @@ class SafeUser(object):
         self.peer_list = SafeList("", cls=PeerNS)
         self.dev_list = SafeList("", cls=SafeDevice)
         self.dev_list.add(self.conf['dev'])
+        self.old_identities = []
         # set up the security on this state
         self._secure_state()
         # set up the metadata
@@ -175,6 +154,7 @@ class SafeUser(object):
         serialization = {
             'privkey_pem': AES_encrypt(self.privkey_pem, self.state_key),
             'cert_pem': AES_encrypt(self.cert_pem, self.state_key),
+            'old_identities': AES_encrypt(json.dumps(self.old_identities), self.state_key),
             'state_keys': json.dumps(self.state_keys),
             'ns_list': AES_encrypt(self.peer_list.serialize(), self.state_key),
             'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
@@ -182,18 +162,14 @@ class SafeUser(object):
             'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
         }
         # sign this serialization and add it to the state logs
-        sig = sign_with_privkey(self.privkey_pem, json.dumps(serialization))
+        to_be_signed = json.dumps([key for key, value in sorted(serialization.items()) if key in SafeUser.STATE_ATTRS])
+        sig = sign_with_privkey(self.privkey_pem, to_be_signed)
         if not hasattr(self, "logs") or not self.logs:
             self.logs = [sig,]
         elif sig != self.logs[0]:
-            self.logs = [sig] + (self.logs)
+            self.logs[0:0] = sig
         serialization['logs'] = json.dumps(self.logs)
         return serialization
-
-    def _verify_signature(self, most_recent_sig):
-        serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in STATE_KEYS}
-        sig = SHA256Hash(json.dumps(serialized_dict)).hexdigest()
-        return true
 
     def _read_logs(self):
         if not os.path.exists(self.conf['log_path']):
@@ -201,9 +177,9 @@ class SafeUser(object):
         with open(self.conf['log_path'], 'r') as log_file:
             return json.load(log_file)
 
-    def _write_logs(self, logs):
+    def _write_logs(self):
         with open(self.conf['log_path'], 'w') as log_file:
-            return json.dump(logs, log_file)
+            return json.dump(self.logs, log_file)
 
     def _reconcile_state(self):
         """
@@ -234,14 +210,15 @@ class SafeUser(object):
         logs = json.loads(self.serialized['logs'])
         for i, sig in enumerate(reversed(self.logs)):
             if logs[-(i+1)] != sig:
-                raise AccountCompromisedException("")
+                raise AccountCompromisedException("It appears that the SafeUser state has been forked!")
 
         # verify the state signature
-        serialized_dict = {key: val for (key, val) in self.serialized.iteritems() if key in SafeUser.STATE_KEYS}
-        if logs and not verify_signature(self.cert_pem, json.dumps(serialized_dict), logs[0]):
-            raise AccountCompromisedException("it appears that the SafeUser state has been compromised")
+        to_be_verified = json.dumps([key for key, value in sorted(self.serialized.items()) if key in SafeUser.STATE_ATTRS])
+        if logs and not verify_signature(self.cert_pem, to_be_verified, logs[0]):
+            raise AccountCompromisedException("It appears that the SafeUser state has not been properly signed!")
         self.logs = logs
-        self._write_logs(logs)
+        self._write_logs()
+        self.old_identities = AES_decrypt(self.serialized['old_identities'], self.state_key)
 
         # Get the peer ns list
         dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)
@@ -267,18 +244,53 @@ class SafeUser(object):
 
         self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
 
+        # reconcile all the messages about updated identities
+
     def get_peers(self):
         return list(self._peer_list)
 
-    @classmethod
-    def join(cls, conf, tofu):
-        dev_json_str = json.dumps(conf['dev'], cls=SafeDevice.ENCODER)
-        tofu.send(dev_json_str)
-        signed_cert_pem = tofu.receive()
-        conf['dev'].cert_pem = signed_cert_pem
-        conf['dev_keychain'].update_keychain(signed_cert_pem)
-        ns = cls(conf)
-        return ns
+    def get_metadata(self, peer_user):
+        namespace_table = self.dynamo.get_table('namespaces')
+        serialized = namespace_table.get_item(hash_key=peer_user.ns_id)
+        metadata_keys = json.loads(serialized['metadata_keys'])
+        index = b64encode(encrypt_with_cert(self.cert_pem, peer_user.remote_index))
+        if index in metadata_keys:
+            metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
+            return AES_decrypt(serialized['metadata'], metadata_key)
+        for (cert_pem, privkey) in self.old_identities:
+            index = b64encode(encrypt_with_cert(cert_pem, peer_user.remote_index))
+            if index in metadata_keys:
+                logging.warn("Using old identity to access %s info" % peer_user.ns_name)
+                metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
+                return AES_decrypt(serialized['metadata'], metadata_key)
+        logging.warn("No access to %s info, removing trust relationship")
+        self._remove_peer_namespace(peer_user)
+
+    @transaction
+    def _add_device(self, device):
+        self.dev_list.add(device)
+        self.state_keys[device.dev_id] = b64encode(encrypt_with_cert(device.cert_pem, self.state_key))
+
+    def add_device(self, tofu_connection):
+        #read the device out from the connection...
+        tofu_connection.send(json.dumps(self.conf['aws_conf']))
+        tofu_connection.send(json.dumps(self.conf['user_conf']))
+        tofu_connection.listen()
+        json_dev_str = tofu_connection.receive()
+        dev = json.loads(json_dev_str, cls=SafeDevice.DECODER)
+        assert isinstance(dev, SafeDevice)
+
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
+        privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
+        dev_x509 = X509.load_certifacate_from_PEM(dev.cert_pem)
+        dev_x509.sign_certificate(cert, privkey)
+        dev.cert_pem = dev_x509.get_PEM_certificate()[0]
+        self._add_device(dev)
+
+        #write the signed certificate dev.cert_pem back to connection
+        tofu_connection.send(dev.cert_pem)
+        tofu_connection.disconnect()
+        logging.debug("Device Added")
 
     def add_peer(self, connection):
         #read namespace info from the connection...
@@ -293,24 +305,28 @@ class SafeUser(object):
         #peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
 
+    def remove_device(self, device):
+        self._remove_device(device)
+        # remove credentials
+        # inform the other peers of the removal
+
     @transaction
     def _remove_device(self, device):
         self.dev_list.remove(device)
+        self.old_identities[0:0] = (self.cert_pem, self.privkey_pem)
         self._secure_state()
-        del self.keys[device.dev_id]
 
     @transaction
     def _add_peer_namespace(self, pns):
         index = b64encode(encrypt_with_cert(pns.local_index, self.metadata_key))
         self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
         self.peer_list.add(pns)
-        # allow the peer namespace to access the metadata
 
     @transaction
     def _remove_peer_namespace(self, pns):
         self.peer_list.remove(pns)
-        del self.metadata_keys[pns.remote_index]
-        # disallow the peer namespace from accessing the metadata
+        index = b64encode(encrypt_with_cert(pns.local_index, self.metadata_key))
+        del self.metadata_keys[index]
 
     @transaction
     def update_metadata_key(self, key, value):
@@ -325,4 +341,3 @@ class SafeUser(object):
         print cert
         self_ns = PeerNS(0, self.name, cert) 
         return self_ns
-
