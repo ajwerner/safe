@@ -10,23 +10,31 @@ import getpass, imaplib
 import email
 from configuration import *
 from safe_user import *
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText
 
 class safe_mail(object):
 
   def send(self):
     server = smtplib.SMTP('smtp.gmail.com', 587)
-
+    server.ehlo()
     server.starttls()
+    server.ehlo()
     #log in to the server
     account = raw_input("Account: ")
+    receiver = raw_input("Please enter receiver email address: ")
     server.login(account, getpass.getpass())
   
     #Send the mail
-    msg = "\nHello!" # The /n separates the message from the headers
-    
-    
-    server.sendmail(account+"@gmail.com", 
-        raw_input("Please enter receiver email address: "), msg)
+    body = "Hello!" # The /n separates the message from the headers
+     
+    msg = MIMEMultipart(); 
+    msg['Subject'] = "safe email"
+    msg['From'] = account+"@gmail.com"
+    msg['To'] = receiver
+    msg.attach(MIMEText(body, 'plain'))
+    text = msg.as_string()
+    server.sendmail(account+"@gmail.com", receiver, text)
 
   def receive(self):
     mail = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -46,10 +54,14 @@ class safe_mail(object):
         for response_part in data:
             if isinstance(response_part, tuple):
                 msg = email.message_from_string(response_part[1])
-                
+        
+        subject = msg['Subject']
+        payload = msg.get_payload()
         print "This is mail #%d: " %(count)
         #only print out the content
-        print msg.get_payload()
+        print "Subject: "+subject+"\n"
+        print "Payload: \n"
+        print payload
         count = count + 1
     
     mail.close()
