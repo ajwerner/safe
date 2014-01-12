@@ -218,7 +218,7 @@ class SafeUser(object):
         my_index = b64encode(hashlib.sha256(self.cert_pem + self.uid).digest())
         self.metadata_keys[my_index] = b64encode(encrypt_with_cert(self.cert_pem, self.metadata_key))
 
-    def serialize(self):
+    def _serialize(self):
         """ returns a dictionary representing the serialization of the state of the namespace """
         serialization = {
             'privkey_pem': AES_encrypt(self.privkey_pem, self.state_key),
