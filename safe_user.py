@@ -252,7 +252,7 @@ class SafeUser(object):
 
     def get_metadata(self, peer_user):
         namespace_table = self.dynamo.get_table('namespaces')
-        serialized = namespace_table.get_item(hash_key=peer_user.ns_id)
+        serialized = namespace_table.get_item(hash_key=peer_user.id)
         metadata_keys = json.loads(serialized['metadata_keys'])
         index = b64encode(encrypt_with_cert(self.cert_pem, peer_user.remote_index))
         if index in metadata_keys:

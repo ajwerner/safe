@@ -68,12 +68,12 @@ class PeerNS:
         return self.user_name
 
     def __hash__(self):
-        return self.ns_id
+        return hash(self.id)
 
     def __cmp__(self, other):
-        if self.ns_id == other.ns_id:
+        if self.id == other.id:
             return 0
-        elif self.ns_id < other.ns_id:
+        elif self.id < other.id:
             return -1
         else:
             return 1
