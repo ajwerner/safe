@@ -21,15 +21,6 @@ BS=16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 unpad = lambda s : s[0:-ord(s[-1])]
 
-"""
-def input_callback():
-    j_id = raw_input("User ID: ")#+"@is-a-furry.org"
-    j_pwd = getpass.getpass("Password: ")
-    rcpt = raw_input("To: ")#+"@is-a-furry.org"
-    nonce = raw_input("Enter Nonce: ")
-    return {'j_id':j_id, 'j_pwd':j_pwd, 'rcpt':rcpt, 'nonce':nonce}
-"""
-
 class tofu(object):
  
     def __init__(self, j_id, j_pwd, receiver):

@@ -15,7 +15,7 @@ import boto
 import getpass
 import os
 import random
-from tofu       import tofu, input_callback
+from tofu       import tofu
 from safe_device     import SafeDevice
 from OpenSSL    import crypto, SSL
 from X509       import X509, X509Error
@@ -42,7 +42,9 @@ def join_namespace(conf):
         writes that to disk
     """
 
-    t = tofu(input_callback)
+    jabber_id = raw_input("Please enter you gmail username: ")
+    jabber_pw = getpass.getpass("Please enter your password: ")
+    t = tofu(jabber_id, jabber_pw, jabber_id)
     t.listen()
     conf['aws_conf'] = json.loads(t.receive())
     conf['user_conf'] = json.loads(t.receive())

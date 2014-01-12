@@ -272,8 +272,11 @@ class SafeUser(object):
         self.dev_list.add(device)
         self.state_keys[device.dev_id] = b64encode(encrypt_with_cert(device.cert_pem, self.state_key))
 
-    def add_device(self, tofu_connection):
+    def add_device(self):
         #read the device out from the connection...
+        jabber_id = raw_input("Please enter you gmail username: ")
+        jabber_pw = getpass.getpass("Please enter your password: ")
+        tofu_connection = tofu(jabber_id, jabber_pw, jabber_id)
         tofu_connection.send(json.dumps(self.conf['aws_conf']))
         tofu_connection.send(json.dumps(self.conf['user_conf']))
         tofu_connection.listen()
@@ -293,7 +296,11 @@ class SafeUser(object):
         tofu_connection.disconnect()
         logging.debug("Device Added")
 
-    def add_peer(self, connection):
+    def add_peer(self):
+        jabber_id = raw_input("Please enter you gmail username: ")
+        jabber_pw = getpass.getpass("Please enter your password: ")
+        other_id = raw_input("Please enter the other user's gmail username: ")
+        tofu_connection = tofu(jabber_id, jabber_pw, other_id)
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = str(uuid.uuid1())
