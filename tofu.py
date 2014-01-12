@@ -42,18 +42,19 @@ class tofu(object):
         self.connected = threading.Event()
         self.msg_queue = []
         self.prefix = str(random.randint(1000, 9999))
-       
-        self.DH = DiffieHellman()
-        self._send(self.DH.publicKey)
+        print self.prefix
+        DH = DiffieHellman()
+
         self._listen()
-        receiver_pubKey = self._receive()
+        self._send(DH.publicKey)
+        self.first_message = self._receive()
+        receiver_pubKey = int(self.first_message, 0)
+        self._send(DH.publicKey)        
 
-        DH.genKey(receiver.pubKey)
+        DH.genKey(receiver_pubKey)
         self.secret_value = DH.getKey()
-        
 
-
-        disconnect(self)
+        self.disconnect()
     
     def _send(self, message):
         tojid = self.receiver
@@ -112,11 +113,9 @@ class tofu(object):
 
         return
 
-    
     def __exit__(self):
         self.connected.clear()
-        self.recv_thread.join()
-            
+        self.recv_thread.join()            
     
     
     def _messageCB(self, conn, msg):
@@ -124,13 +123,21 @@ class tofu(object):
         if msg_prefix == self.prefix:
             return
         sender = str(msg.getFrom()).split('/')[0]
-        self.msg_queue.append(msg) 
+        body = msg.getBody()[4:]
+        if hasattr(self, "first_message") and body == self.first_message:
+            return
+        self.msg_queue.append(body) 
     
     def messageCB(self, conn, msg):
-        msg_prefix = msg.getBody()[:len(self.prefix)]
+        msg_prefix = msg.getBody()[:4]
+        if hasattr(self, "first_message") and msg.getBody() == self.first_message:
+            return
         if msg_prefix == self.prefix:
           return
-        msg_body=base64.b64decode(str(msg.getBody()[4:]))
+        msg_body = msg.getBody()[4:]
+        if msg_body == self.first_message:
+            return
+        msg_body=base64.b64decode(str(msg_body))
         sender = str(msg.getFrom()).split('/')[0]
         key=hashlib.sha256(self.secret_value).digest()
         iv=msg_body[:16]
