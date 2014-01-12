@@ -309,7 +309,7 @@ class SafeUser(object):
         print ns_json
         connection.listen()
         peer_ns_json = connection.receive()
-        peer_ns = json.loads(peer_ns_json, cls=PeerNS.DECODER)
+        peer_ns = PeerNS(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
         #peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer_namespace(peer_ns)
@@ -327,8 +327,8 @@ class SafeUser(object):
 
     @transaction
     def _add_peer_namespace(self, pns):
-        index = b64encode(encrypt_with_cert(pns.local_index, self.metadata_key))
-        self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.pub_key, self.metadata_key))
+        index = b64encode(encrypt_with_cert(pns.cert_pem, self.local_index))
+        self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
         self.peer_list.add(pns)
 
     @transaction
