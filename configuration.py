@@ -41,10 +41,10 @@ def join_namespace(conf):
         gets the AWS and namespace configuration information, 
         writes that to disk
     """
-
+    tofu_id = raw_input("Enter a code for this connection: ")
     jabber_id = raw_input("Please enter you gmail username: ")
     jabber_pw = getpass.getpass("Please enter your password: ")
-    t = tofu(jabber_id, jabber_pw, jabber_id)
+    t = tofu(jabber_id, jabber_pw, jabber_id, tofu_id)
     t.listen()
     conf['aws_conf'] = json.loads(t.receive())
     conf['user_conf'] = json.loads(t.receive())

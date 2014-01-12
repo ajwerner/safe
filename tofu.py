@@ -16,6 +16,8 @@ from Crypto import Random
 from Crypto.Cipher import AES
 from diffie_hellman import *
 
+PREFIX_LEN = 5
+
 #handles padding before encryption and unpadding after decryption
 BS=16
 pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
@@ -23,16 +25,16 @@ unpad = lambda s : s[0:-ord(s[-1])]
 
 class tofu(object):
  
-    def __init__(self, j_id, j_pwd, receiver):
+    def __init__(self, j_id, j_pwd, receiver, tofu_id):
         self.j_id= j_id
         self.j_pwd= j_pwd
         self.receiver= receiver
-
+        self.id = tofu_id
         self.enc=''
         self.recv_thread = None
         self.connected = threading.Event()
         self.msg_queue = []
-        self.prefix = str(random.randint(1000, 9999))
+        self.prefix = b64encode(Random.new().read(PREFIX_LEN))[:PREFIX_LEN]
         DH = DiffieHellman()
 
         self._listen()
@@ -48,7 +50,7 @@ class tofu(object):
     
     def _send(self, message):
         tojid = self.receiver
-        text = self.prefix+hex(message)
+        text = self.id+self.prefix+hex(message)
         jid = xmpp.protocol.JID(self.j_id)
         cl = xmpp.Client(jid.getDomain(), debug=[])
 
@@ -100,17 +102,16 @@ class tofu(object):
         self.recv_thread = threading.Thread(target = self.GoOn, args = (cl,))
         self.recv_thread.daemon = True
         self.recv_thread.start()
-
         return
 
     def __exit__(self):
         self.connected.clear()
         self.recv_thread.join()            
     
-    
     def _messageCB(self, conn, msg):
-        msg_prefix = msg.getBody()[:len(self.prefix)]
-        if msg_prefix == self.prefix:
+        msg_id = msg.getBody()[:len(self.id)]
+        msg_prefix = msg.getBody()[len(self.id):len(self.id)+PREFIX_LEN]
+        if msg_id != self.id or msg_prefix == self.prefix:
             return
         sender = str(msg.getFrom()).split('/')[0]
         body = msg.getBody()[4:]
@@ -119,11 +120,13 @@ class tofu(object):
         self.msg_queue.append(body) 
     
     def messageCB(self, conn, msg):
-        msg_prefix = msg.getBody()[:4]
+        msg_id = msg.getBody()[:len(self.id)]
+        msg_prefix = msg.getBody()[len(self.id):len(self.id)+PREFIX_LEN]
+        if msg_id != self.id or msg_prefix == self.prefix:
+            return
         if hasattr(self, "first_message") and msg.getBody() == self.first_message:
             return
-        if msg_prefix == self.prefix:
-          return
+        import ipdb; ipdb.set_trace()
         msg_body = msg.getBody()[4:]
         if msg_body == self.first_message:
             return
@@ -168,7 +171,7 @@ class tofu(object):
         obj=AES.new(key, AES.MODE_CBC, iv)
         text=iv+obj.encrypt(text)
         text=base64.encodestring(text)
-        text=self.prefix+text
+        text=self.id+self.prefix+text
 
         jid = xmpp.protocol.JID(self.j_id)
         cl = xmpp.Client(jid.getDomain(), debug=[])

@@ -274,9 +274,10 @@ class SafeUser(object):
 
     def add_device(self):
         #read the device out from the connection...
+        tofu_id = raw_input("Enter a code for this connection: ")
         jabber_id = raw_input("Please enter you gmail username: ")
         jabber_pw = getpass.getpass("Please enter your password: ")
-        tofu_connection = tofu(jabber_id, jabber_pw, jabber_id)
+        tofu_connection = tofu(jabber_id, jabber_pw, jabber_id, tofu_id)
         tofu_connection.send(json.dumps(self.conf['aws_conf']))
         tofu_connection.send(json.dumps(self.conf['user_conf']))
         tofu_connection.listen()
@@ -297,18 +298,19 @@ class SafeUser(object):
         logging.debug("Device Added")
 
     def add_peer(self):
+        tofu_id = raw_input("Enter a code for this connection: ")
         jabber_id = raw_input("Please enter you gmail username: ")
         jabber_pw = getpass.getpass("Please enter your password: ")
         other_id = raw_input("Please enter the other user's gmail username: ")
-        connection = tofu(jabber_id, jabber_pw, other_id)
+        connection = tofu(jabber_id, jabber_pw, other_id, tofu_id)
         #read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = str(uuid.uuid1())
         ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
         connection.send(ns_json)
-        print ns_json
         connection.listen()
         peer_ns_json = connection.receive()
+        print peer_ns_json
         peer_ns = PeerNS(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
         #peer_ns_cert_pem = peer_ns.pub_key
