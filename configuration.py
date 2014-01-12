@@ -43,8 +43,10 @@ def join_namespace(conf):
     """
 
     t = tofu(input_callback)
+    t.listen()
     conf['aws_conf'] = json.loads(t.receive())
     conf['user_conf'] = json.loads(t.receive())
+
     conf['dev_conf'] = {
         'dev_name': raw_input("Device Name: ").strip(),
         'dev_id': random.randint(0, 65535)
@@ -54,11 +56,12 @@ def join_namespace(conf):
     # Make the keychain
     dev = SafeDevice(**conf['dev_conf'])
 
-    dev_json = json.dumps(conf['dev'], cls=SafeDevice.ENCODER)
+    dev_json = json.dumps(dev, cls=SafeDevice.ENCODER)
 
     t.send(dev_json)
 
     signed_cert_pem = t.receive()
+    t.disconnect()
     conf['dev_conf']['cert_pem'] = signed_cert_pem
 
     with open(conf['conf_path'], 'w') as conf_file:
@@ -166,7 +169,7 @@ def get_config(conf_dir):
             initialize_new_conf(conf)
             break
         elif (response_char == 'n'):
-            conf = join_namespace(conf)
+            join_namespace(conf)
             break
     # init 
     return conf
