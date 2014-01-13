@@ -91,7 +91,7 @@ class SafeUser(object):
         # if you can't get in once, see if somebody left you some keys in an S3 bucket
         if not self._init_aws():
             # you tried getting new keys but you're still locked out!
-            if self._fetch_aws_conf_from_S3() or not self._init_aws(): 
+            if not self._fetch_aws_conf_from_S3() or not self._init_aws(): 
                 raise Exception("This device appears to have been removed :-(")
         self._reconcile_state()
 
@@ -454,7 +454,9 @@ class SafeUser(object):
 
         update_msg = json.dumps({"event": "keys_changed", "id": self.id})
         for peer in self.get_peer_list():
-            self.sqs.send_message(peer.id, update_msg)
+            queue = self.sqs.get_queue(peer.id)
+            if queue:
+                self.sqs.send_message(queue, update_msg)
         # inform the other peers of the removal
 
     @transaction
