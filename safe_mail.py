@@ -9,6 +9,7 @@ import smtplib
 import getpass, imaplib
 import email
 import random
+import ast
 from configuration import *
 from safe_user import *
 #from email.MIMEMultipart import MIMEMultipart
@@ -120,7 +121,7 @@ class safe_mail(object):
           count = count + 1
         
         elif subject[:7] == "(Safe)-":
-          content = safe_mail_payload(**msg.get_payload())
+          content = safe_mail_payload(**(ast.literal_eval(msg.get_payload())))
           encrypted_key = content.key()
           sender_dev_cert = content.cert()
           if not verify_signature(sender_dev_cert, encrypted_key,
