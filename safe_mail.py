@@ -20,7 +20,7 @@ from Crypto import Random
 from Crypto.Cipher import AES
 
 class safe_mail_payload(object):
-  def __init__(self, dev_id, body, key, cert, sig):
+  def __init__(self, dev_id=None, body=None, key=None, cert=None, sig=None):
     self.dev_id = dev_id
     self.body = body
     self.key = key
@@ -122,14 +122,14 @@ class safe_mail(object):
         
         elif subject[:7] == "(Safe)-":
           content = safe_mail_payload(**(ast.literal_eval(msg.get_payload())))
-          encrypted_key = content.key()
-          sender_dev_cert = content.cert()
+          encrypted_key = content.key
+          sender_dev_cert = content.cert
           if not verify_signature(sender_dev_cert, encrypted_key,
-              base64.decodestring(content.sig())):
+              base64.decodestring(content.sig)):
             print "This mail is cannot be verified"
           else:
             key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
-            plaintext = AES_decrypt(content.body(), key)
+            plaintext = AES_decrypt(content.body, key)
             print "This is mail #%d: " %(count)
             print "Subject: "+subject
             print "Payload:"
