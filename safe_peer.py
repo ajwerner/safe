@@ -16,34 +16,34 @@ For instance Alice the owner of the namespace alice can have N number of peer na
 import time
 import json
 
-class PeerNSError():
+class SafePeerError():
     def __init__(self, value):
         self.value = value
 
     def __str__(self):
         return str(self.value)
 
-class PeerNSEncoder(json.JSONEncoder):
+class SafePeerEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, PeerNS):
+        if isinstance(obj, SafePeer):
             return obj.__dict__
         else:
             return json.JSONEncoder.default(self, obj)
 
-class PeerNSDecoder(json.JSONDecoder):
+class SafePeerDecoder(json.JSONDecoder):
     def decode(self, json_str):
         try:
             dec_dict = json.loads(str(json_str))
         except ValueError as e:
             raise e
         if dec_dict is not None:
-            return PeerNS(**dec_dict)
+            return SafePeer(**dec_dict)
         else:
             return None
 
-class PeerNS:
-    ENCODER = PeerNSEncoder
-    DECODER = PeerNSDecoder
+class SafePeer:
+    ENCODER = SafePeerEncoder
+    DECODER = SafePeerDecoder
 
     def __init__(self, id=None, user_name=None, cert_pem=None, ctime=-1, remote_index=None, local_index=None):
         self.remote_index = remote_index

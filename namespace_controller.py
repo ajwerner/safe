@@ -1,5 +1,5 @@
 from safe_user import SafeUser
-from peer_ns import PeerNS
+from peer_ns import SafePeer
 from tofu import *
 import sys, getopt
 
@@ -17,7 +17,7 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print '-a, --add-ns Adds a Namespace in to PeerNS list.'
+            print '-a, --add-ns Adds a Namespace in to SafePeer list.'
             sys.exit()
         elif opt in ("-a", "--add-ns"):
             ns_controller_add_ns(ns)

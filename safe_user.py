@@ -36,7 +36,7 @@ from urllib2       import urlopen, HTTPError
 from tofu          import *
 from safe_list     import SafeList
 from safe_device   import SafeDevice
-from peer_ns       import PeerNS
+from peer_ns       import SafePeer
 from keychain      import *
 from X509          import X509, X509Error
 
@@ -165,7 +165,7 @@ class SafeUser(object):
         """
         # Initial remote serialization creation
         self.uid = b64encode(uuid4().bytes)
-        self.peer_list = SafeList("", cls=PeerNS)
+        self.peer_list = SafeList("", cls=SafePeer)
         self.dev_list = SafeList("", cls=SafeDevice)
         self.dev_list.add(self.dev)
         self.old_identities = []
@@ -294,7 +294,7 @@ class SafeUser(object):
         if hasattr(self, 'ns_list'):
             self.peer_list.update_from_serialization(dec_ns_list)
         else:  
-            self.peer_list = SafeList(dec_ns_list, PeerNS)
+            self.peer_list = SafeList(dec_ns_list, SafePeer)
 
         # Get the device list
         dec_dev_list = AES_decrypt(self.serialized['dev_list'], self.state_key)
@@ -397,10 +397,10 @@ class SafeUser(object):
         # read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = b64encode(uuid.uuid4().bytes)
-        ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
+        ns_json = json.dumps(ns, cls=SafePeer.ENCODER)
         connection.send(ns_json)
         peer_ns_json = connection.receive()
-        peer_ns = PeerNS(**json.loads(peer_ns_json))
+        peer_ns = SafePeer(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
         # peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer(peer_ns)
@@ -482,4 +482,4 @@ class SafeUser(object):
         self.metadata[key] = value
 
     def get_peer_user_object(self):
-        return PeerNS(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
+        return SafePeer(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
