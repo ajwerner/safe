@@ -54,7 +54,7 @@ class safe_mail(object):
     
     
     if encrypt == True:
-      #key=hashlib.sha256(str(random.randint(1,10000))).digest()
+      key=hashlib.sha256(str(random.randint(1,10000))).digest()
       #iv = Random.new().read(AES.block_size)
       #obj=AES.new(key, AES.MODE_CFB, iv)
       #body = iv+obj.encrypt(body)
@@ -65,9 +65,10 @@ class safe_mail(object):
       s = SafeUser()
       receiver_cert = s.get_metadata(s.get_peer_list()[0])['cert_pem']
       encrypted_key = encrypt_with_cert(receiver_cert, key)
-      signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
-      signature = base64.encodestring(signature)     
-      
+      #signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
+      #signature = base64.encodestring(signature)     
+      signature = "qwrtyuioasfgjklzxcvbnm,.sdfghjtyu"
+
       mail = safe_mail_payload(s.name+"."+s.dev.dev_name, body, encrypted_key,
           s.dev_kc.read_keychain()[0], signature)
       dict_str = str(mail.__dict__)
