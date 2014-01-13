@@ -26,7 +26,7 @@ class SafeList(object):
         return json.dumps(list(self.set), cls=self.encoder)
 
     def update_from_serialization(self, serialization):
-        """ in place deserialization for the PeerNSList object """
+        """ in place deserialization for the SafePeerList object """
         if not serialization:
             raise ValueError("NoneType serialization given")
         new_set = set()

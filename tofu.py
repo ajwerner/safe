@@ -52,23 +52,6 @@ class tofu(object):
         self.disconnect()
 
     def _send(self, message):
-        # tojid = self.receiver
-        # text = self.id+self.prefix+hex(message)
-        # jid = xmpp.protocol.JID(self.j_id)
-        # cl = xmpp.Client(jid.getDomain(), debug=[])
-
-        # try:
-        #     con = cl.connect(server=('talk.google.com', 5222))
-        # except IOError as e:
-        #     print e
-        # if not con:
-        #     print 'could not connect!'
-        #     sys.exit()
-        # auth = cl.auth(jid.getNode(), self.j_pwd,
-        #         resource = jid.getResource())
-        # if not auth:
-        #     print 'could not authenticate!'
-        #     sys.exit()
         text = self.id+self.prefix+message
         self.cl.send(xmpp.protocol.Message(self.receiver, text))
 
@@ -136,22 +119,6 @@ class tofu(object):
             cipher = AES.new(key, AES.MODE_CFB, iv)
             msg=cipher.decrypt(body[AES.block_size:])
             self.msg_queue.append(msg)
-         
-    
-    # def messageCB(self, conn, msg):
-    #     msg_id = msg.getBody()[:len(self.id)]
-    #     msg_prefix = msg.getBody()[len(self.id):len(self.id)+PREFIX_LEN]
-    #     if msg_id != self.id or msg_prefix == self.prefix:
-    #         return
-    #     if hasattr(self, "first_message") and msg.getBody() == self.first_message:
-    #         return
-    #     msg_body = msg.getBody()[len(self.id) + PREFIX_LEN:]
-    #     if msg_body == self.first_message:
-    #         return
-    #     msg_body=base64.b64decode(str(msg_body))
-    #     sender = str(msg.getFrom()).split('/')[0]
-
-    #     self.msg_queue.append(msg)
 
     def GoOn(self, conn):
         self.condition.acquire()
@@ -159,6 +126,7 @@ class tofu(object):
             while self.connected.is_set():
                 conn.Process(1)
         except:
+            self.condition.notify_all()
             self.connected.clear()
         sys.exit()
     

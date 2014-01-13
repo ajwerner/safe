@@ -36,7 +36,7 @@ from urllib2       import urlopen, HTTPError
 from tofu          import *
 from safe_list     import SafeList
 from safe_device   import SafeDevice
-from peer_ns       import PeerNS
+from safe_peer       import SafePeer
 from keychain      import *
 from X509          import X509, X509Error
 
@@ -64,7 +64,6 @@ def transaction(f):
                 self._reconcile_state()
 
         if not committed:
-            # TODO: better excpetion
             raise Exception("Failed to commit change after %d attempts" % (num_retries,))
         self._write_logs()
     return wrapped
@@ -82,8 +81,8 @@ class SafeUser(object):
                   'metadata_keys', 'metadata', 'uid']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
-    def __init__(self, conf_dir=".safe_config"):
-        conf, dev, dev_kc = get_config(conf_dir)
+    def __init__(self, conf_dir=".safe_config", credentials_csv_path=None):
+        conf, dev, dev_kc = get_config(conf_dir, credentials_csv_path=credentials_csv_path)
         self.conf = conf
         self.dev = dev
         self.dev_kc = dev_kc
@@ -91,8 +90,8 @@ class SafeUser(object):
 
         # if you can't get in once, see if somebody left you some keys in an S3 bucket
         if not self._init_aws():
-            self._fetch_aws_conf_from_S3()
-            if not self._init_aws(): # you tried getting new keys but you're still locked out!
+            # you tried getting new keys but you're still locked out!
+            if not self._fetch_aws_conf_from_S3() or not self._init_aws(): 
                 raise Exception("This device appears to have been removed :-(")
         self._reconcile_state()
 
@@ -156,8 +155,8 @@ class SafeUser(object):
                 json_string = json.dumps(self.conf)
                 conf_file.write(json_string)
             self._init_aws()
-            return
-        raise Exception("No valid credentials found for this device")
+            return True
+        return False
 
     def _initialize_state(self, namespace_table):
         """ 
@@ -166,7 +165,7 @@ class SafeUser(object):
         """
         # Initial remote serialization creation
         self.uid = b64encode(uuid4().bytes)
-        self.peer_list = SafeList("", cls=PeerNS)
+        self.peer_list = SafeList("", cls=SafePeer)
         self.dev_list = SafeList("", cls=SafeDevice)
         self.dev_list.add(self.dev)
         self.old_identities = []
@@ -295,7 +294,7 @@ class SafeUser(object):
         if hasattr(self, 'ns_list'):
             self.peer_list.update_from_serialization(dec_ns_list)
         else:  
-            self.peer_list = SafeList(dec_ns_list, PeerNS)
+            self.peer_list = SafeList(dec_ns_list, SafePeer)
 
         # Get the device list
         dec_dev_list = AES_decrypt(self.serialized['dev_list'], self.state_key)
@@ -354,11 +353,11 @@ class SafeUser(object):
         for (cert_pem, privkey) in self.old_identities:
             index = b64encode(hashlib.sha256(cert_pem + peer_user.remote_index).digest())
             if index in metadata_keys:
-                logging.warn("Using old identity to access %s info" % peer_user.ns_name)
-                metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
+                logging.warn("Using old identity to access %s info" % peer_user.user_name)
+                metadata_key = decrypt_with_privkey(privkey, b64decode(metadata_keys[index]))
                 return AES_decrypt(serialized['metadata'], metadata_key)
         logging.warn("No access to %s info, removing trust relationship")
-        self._remove_peer_namespace(peer_user)
+        self._remove_peer(peer_user)
 
     @transaction
     def _add_device(self, device):
@@ -398,14 +397,13 @@ class SafeUser(object):
         # read namespace info from the connection...
         ns = self.get_peer_user_object()
         ns.remote_index = b64encode(uuid.uuid4().bytes)
-        ns_json = json.dumps(ns, cls=PeerNS.ENCODER)
+        ns_json = json.dumps(ns, cls=SafePeer.ENCODER)
         connection.send(ns_json)
         peer_ns_json = connection.receive()
-        peer_ns = PeerNS(**json.loads(peer_ns_json))
+        peer_ns = SafePeer(**json.loads(peer_ns_json))
         peer_ns.local_index = ns.remote_index
         # peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer(peer_ns)
-
 
     @transaction
     def _add_peer(self, pns):
@@ -456,7 +454,9 @@ class SafeUser(object):
 
         update_msg = json.dumps({"event": "keys_changed", "id": self.id})
         for peer in self.get_peer_list():
-            self.sqs.send_message(peer.id, update_msg)
+            queue = self.sqs.get_queue(peer.id)
+            if queue:
+                self.sqs.send_message(queue, update_msg)
         # inform the other peers of the removal
 
     @transaction
@@ -483,4 +483,4 @@ class SafeUser(object):
         self.metadata[key] = value
 
     def get_peer_user_object(self):
-        return PeerNS(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
+        return SafePeer(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
