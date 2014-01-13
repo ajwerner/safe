@@ -137,6 +137,7 @@ class safe_mail(object):
               print plaintext
               count = count + 1
               print "---------------------  END OF MESSAGE  ---------------------"
+
           except:
               print "Something went wrong with the email format"
     
