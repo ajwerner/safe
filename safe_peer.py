@@ -1,6 +1,6 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-"""peer_ns.py: A Simple implementation of a peer namespace for Safe."""
+"""safe_peer.py: A Simple implementation of a peer namespace for Safe."""
 
 __author__      = "Wathsala Vithanage"
 __email__       = "wathsala@princeton.edu"

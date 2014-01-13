@@ -36,7 +36,7 @@ from urllib2       import urlopen, HTTPError
 from tofu          import *
 from safe_list     import SafeList
 from safe_device   import SafeDevice
-from peer_ns       import SafePeer
+from safe_peer       import SafePeer
 from keychain      import *
 from X509          import X509, X509Error
 
@@ -404,7 +404,6 @@ class SafeUser(object):
         peer_ns.local_index = ns.remote_index
         # peer_ns_cert_pem = peer_ns.pub_key
         self._add_peer(peer_ns)
-
 
     @transaction
     def _add_peer(self, pns):
