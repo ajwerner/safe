@@ -21,11 +21,11 @@ from Crypto.Cipher import AES
 
 class safe_mail_payload(object):
   def __init__(self, dev_id=None, body=None, key=None, cert=None, sig=None):
-    self.dev_id = dev_id
-    self.body = body
-    self.key = key
-    self.cert = cert
-    self.sig = sig
+    self.dev_id = str(dev_id)
+    self.body = str(body)
+    self.key = str(key)
+    self.cert = str(cert)
+    self.sig = str(sig)
 class safe_mail(object):
 
   def send(self, message=False, receiver_addr=False, encrypt=False):
@@ -135,6 +135,7 @@ class safe_mail(object):
             print "Payload:"
             print plaintext
             count = count + 1
+            print "---------------------  END OF MESSAGE  ---------------------"
 
     
     mail.close()

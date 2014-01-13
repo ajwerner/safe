@@ -114,8 +114,8 @@ class KeyChain:
         Return the certficate and the private key
         '''
         try:
-            kc_mm = mmap.mmap(self.kc_file.fileno(), 0, mmap.MAP_PRIVATE, 
-                    mmap.PROT_READ | mmap.PROT_WRITE)
+            kc_mm = mmap.mmap(self.kc_file.fileno(), 0, mmap.MAP_SHARED, 
+                                mmap.PROT_READ | mmap.PROT_WRITE)
         except (ValueError, TypeError) as e:
             return None
         _offset = 0
