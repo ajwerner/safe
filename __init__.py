@@ -3,4 +3,3 @@
 #
 
 from safe.safe_user import SafeUser
-import safe.tofu

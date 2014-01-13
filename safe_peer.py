@@ -10,16 +10,8 @@ __license__     = "Apache"
 __version__     = "0.1"
 
 """
-A peer namespace is a namespace owned by a different entity in the network. For instance Alice the owner of the namespace alice can have N number of peer namespaces which she is connected to but owned by Bob, Carla, Dan, ... etc. 
-
-Peer namespaces are stored in the disk in following JSON format.
-
-    {
-        "ns_id":        "A unique 128-bit ID"
-        "ns_name":      "ALice"
-        "ctime":        "10/11/2013"
-        "pub_key":      "PEM encoded RSA public key"
-    }
+A peer namespace is a namespace owned by a different entity in the network. 
+For instance Alice the owner of the namespace alice can have N number of peer namespaces which she is connected to but owned by Bob, Carla, Dan, ... etc. 
 """
 import time
 import json
@@ -75,15 +67,3 @@ class PeerNS:
 
     def __cmp__(self, other):
         return cmp(self.id, other.id)
-
-'''Test PeerNS class
-try:
-    pns = PeerNS("1904A579", "Alice", "AAAAAAAAAAAAAAAAA")
-    print pns
-    json_pns = json.dumps(pns, cls=PeerNSEncoder)
-    print json_pns
-    pns2 = json.loads(json_pns, cls=PeerNSDecoder)
-    print pns2
-except PeerNSError as e:
-    print "Error"
-'''

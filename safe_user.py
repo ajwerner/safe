@@ -64,7 +64,6 @@ def transaction(f):
                 self._reconcile_state()
 
         if not committed:
-            # TODO: better excpetion
             raise Exception("Failed to commit change after %d attempts" % (num_retries,))
         self._write_logs()
     return wrapped
@@ -82,8 +81,8 @@ class SafeUser(object):
                   'metadata_keys', 'metadata', 'uid']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
-    def __init__(self, conf_dir=".safe_config"):
-        conf, dev, dev_kc = get_config(conf_dir)
+    def __init__(self, conf_dir=".safe_config", credentials_csv_path=None):
+        conf, dev, dev_kc = get_config(conf_dir, credentials_csv_path=credentials_csv_path)
         self.conf = conf
         self.dev = dev
         self.dev_kc = dev_kc
