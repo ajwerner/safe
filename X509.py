@@ -82,7 +82,7 @@ class X509:
         return cls(None, key, None, None, None, None, cert)
 
     @classmethod
-    def load_certifacate_from_PEM(cls, PEM_cert):
+    def load_certificate_from_PEM(cls, PEM_cert):
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, PEM_cert)
         return cls(None, None, None, None, None, None, cert)
 
@@ -105,8 +105,9 @@ class X509:
         return cert_pem, key_pem
 
     def validate_cert(self, cacert_pem): 
+        print cacert_pem
         # Create an X509 object for cacert_pem (CA Certificate).
-        cacert = X509.load_certifacate_from_PEM(cacert_pem).get_certificate()[0]
+        cacert = X509.load_certificate_from_PEM(cacert_pem).get_certificate()[0]
         # Get the X509 object of this certifcate.
         cert = self.get_certificate()[0]
         sig_algo = cert.get_signature_algorithm()
