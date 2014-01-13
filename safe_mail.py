@@ -65,9 +65,8 @@ class safe_mail(object):
       s = SafeUser()
       receiver_cert = s.get_metadata(s.get_peer_list()[0])['cert_pem']
       encrypted_key = encrypt_with_cert(receiver_cert, key)
-      #signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
-      #signature = base64.encodestring(signature)     
-      signature = "qwrtyuioasfgjklzxcvbnm,.sdfghjtyu"
+      signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
+      signature = base64.encodestring(signature)     
 
       mail = safe_mail_payload(s.name+"."+s.dev.dev_name, body, encrypted_key,
           s.dev_kc.read_keychain()[0], signature)
@@ -125,19 +124,21 @@ class safe_mail(object):
           content = safe_mail_payload(**(ast.literal_eval(msg.get_payload())))
           encrypted_key = content.key
           sender_dev_cert = content.cert
-          if not verify_signature(sender_dev_cert, encrypted_key,
-              base64.decodestring(content.sig)):
-            print "This mail is cannot be verified"
-          else:
-            key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
-            plaintext = AES_decrypt(content.body, key)
-            print "This is mail #%d: " %(count)
-            print "Subject: "+subject
-            print "Payload:"
-            print plaintext
-            count = count + 1
-            print "---------------------  END OF MESSAGE  ---------------------"
-
+          try:
+            if not verify_signature(sender_dev_cert, encrypted_key,
+                base64.decodestring(content.sig)):
+              print "This mail is cannot be verified"
+            else:
+              key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
+              plaintext = AES_decrypt(content.body, key)
+              print "This is mail #%d: " %(count)
+              print "Subject: "+subject
+              print "Payload:"
+              print plaintext
+              count = count + 1
+              print "---------------------  END OF MESSAGE  ---------------------"
+          except Error:
+              print "Something went wrong with the email format"
     
     mail.close()
     mail.logout() 
