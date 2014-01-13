@@ -53,11 +53,13 @@ class safe_mail(object):
     
     
     if encrypt == True:
-      key=hashlib.sha256(str(random.randint(1,10000))).digest()
-      iv = Random.new().read(AES.block_size)
-      obj=AES.new(key, AES.MODE_CFB, iv)
-      body = iv+obj.encrypt(body)
-      body = base64.encodestring(body)
+      #key=hashlib.sha256(str(random.randint(1,10000))).digest()
+      #iv = Random.new().read(AES.block_size)
+      #obj=AES.new(key, AES.MODE_CFB, iv)
+      #body = iv+obj.encrypt(body)
+      #body = base64.encodestring(body)
+
+      body = AES_encrypt(body, key)
 
       s = SafeUser()
       receiver_cert = s.get_metadata(s.get_peer_list()[0])['cert_pem']
@@ -121,7 +123,8 @@ class safe_mail(object):
           content = safe_mail_payload(**msg.get_payload())
           encrypted_key = content.key()
           sender_dev_cert = content.cert()
-          if verify_signature(sender_dev_cert, encrypted_key, content.sig()):
+          if not verify_signature(sender_dev_cert, encrypted_key,
+              base64.decodestring(content.sig())):
             print "This mail is cannot be verified"
           else:
             key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
