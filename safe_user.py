@@ -90,8 +90,8 @@ class SafeUser(object):
 
         # if you can't get in once, see if somebody left you some keys in an S3 bucket
         if not self._init_aws():
-            self._fetch_aws_conf_from_S3()
-            if not self._init_aws(): # you tried getting new keys but you're still locked out!
+            # you tried getting new keys but you're still locked out!
+            if self._fetch_aws_conf_from_S3() or not self._init_aws(): 
                 raise Exception("This device appears to have been removed :-(")
         self._reconcile_state()
 
@@ -155,8 +155,8 @@ class SafeUser(object):
                 json_string = json.dumps(self.conf)
                 conf_file.write(json_string)
             self._init_aws()
-            return
-        raise Exception("No valid credentials found for this device")
+            return True
+        return False
 
     def _initialize_state(self, namespace_table):
         """ 
@@ -353,7 +353,7 @@ class SafeUser(object):
         for (cert_pem, privkey) in self.old_identities:
             index = b64encode(hashlib.sha256(cert_pem + peer_user.remote_index).digest())
             if index in metadata_keys:
-                logging.warn("Using old identity to access %s info" % peer_user.ns_name)
+                logging.warn("Using old identity to access %s info" % peer_user.user_name)
                 metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
                 return AES_decrypt(serialized['metadata'], metadata_key)
         logging.warn("No access to %s info, removing trust relationship")
