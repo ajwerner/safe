@@ -354,7 +354,7 @@ class SafeUser(object):
             index = b64encode(hashlib.sha256(cert_pem + peer_user.remote_index).digest())
             if index in metadata_keys:
                 logging.warn("Using old identity to access %s info" % peer_user.user_name)
-                metadata_key = decrypt_with_privkey(self.privkey_pem, b64decode(metadata_keys[index]))
+                metadata_key = decrypt_with_privkey(privkey, b64decode(metadata_keys[index]))
                 return AES_decrypt(serialized['metadata'], metadata_key)
         logging.warn("No access to %s info, removing trust relationship")
         self._remove_peer(peer_user)

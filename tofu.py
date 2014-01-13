@@ -126,6 +126,7 @@ class tofu(object):
             while self.connected.is_set():
                 conn.Process(1)
         except:
+            self.condition.notify_all()
             self.connected.clear()
         sys.exit()
     
