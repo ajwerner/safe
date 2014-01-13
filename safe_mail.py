@@ -8,19 +8,23 @@ __version__     = "0.1"
 import smtplib
 import getpass, imaplib
 import email
+import random
 from configuration import *
 from safe_user import *
 #from email.MIMEMultipart import MIMEMultipart
 #from email.MIMEText import MIMEText
 from email.mime.text import MIMEText
 from keychain import *
+from Crypto import Random
+from Crypto.Cipher import AES
 
-class mail(object):
-  def __init__(self, dev_id, body, key)
+class safe_mail_payload(object):
+  def __init__(self, dev_id, body, key, cert, sig):
     self.dev_id = dev_id
     self.body = body
     self.key = key
-
+    self.cert = cert
+    self.sig = sig
 class safe_mail(object):
 
   def send(self, message=False, receiver_addr=False, encrypt=False):
@@ -47,27 +51,32 @@ class safe_mail(object):
 
     msg = MIMEText(body)
     
-    '''
+    
     if encrypt == True:
-      key=hashlib.sha256(random.randin(1,10000).digest()
+      key=hashlib.sha256(str(random.randint(1,10000))).digest()
       iv = Random.new().read(AES.block_size)
       obj=AES.new(key, AES.MODE_CFB, iv)
-      body = iv_obj.encrypt(body)
+      body = iv+obj.encrypt(body)
       body = base64.encodestring(body)
 
       s = SafeUser()
-      receiver_cert = None
-      encrypt_key = encrypt_with_cert(receiver_cert, key)
-      signed_key = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypt_key)
-      signed_key = base64.encodestring(signed_key)     
+      receiver_cert = s.get_metadata(s.get_peer_list()[0])['cert_pem']
+      encrypted_key = encrypt_with_cert(receiver_cert, key)
+      signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
+      signature = base64.encodestring(signature)     
       
-      mail = mail(s.name+"."+s.dev.dev_name, body, signed_key)
+      mail = safe_mail_payload(s.name+"."+s.dev.dev_name, body, encrypted_key,
+          s.dev_kc.read_keychain()[0], signature)
       dict_str = str(mail.__dict__)
       msg = MIMEText(dict_str)
-    '''
+    
     #msg = MIMEText(body)
-    #msg = MIMEMultipart(); 
-    msg['Subject'] = "(Safe)-"+subject
+    #msg = MIMEMultipart();
+    if encrypt == True:
+      msg['Subject'] = "(Safe)-"+subject
+    else:
+      msg['Subject'] = subject
+
     msg['From'] = account+"@gmail.com"
     msg['To'] = receiver
     #msg.attach(MIMEText(body, 'plain'))
@@ -76,6 +85,7 @@ class safe_mail(object):
 
   def receive(self, safe_only=False):
 
+    s = SafeUser()
     num = input("Please enter how many email you wish to receive: ")
     
     mail = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -96,24 +106,31 @@ class safe_mail(object):
             if isinstance(response_part, tuple):
                 msg = email.message_from_string(response_part[1])
         
-        mail = mail(**msg)
 
-
+        
         subject = msg['Subject']
-        payload = msg.get_payload()
+        #payload = msg.get_payload()
         if not safe_only:
           print "This is mail #%d: " %(count)
           print "Subject: "+subject
           print "Payload:"
-          print payload
+          print msg.get_payload()
           count = count + 1
         
         elif subject[:7] == "(Safe)-":
-          print "This is mail #%d: " %(count)
-          print "Subject: "+subject
-          print "Payload:"
-          print payload
-          count = count + 1
+          content = safe_mail_payload(**msg.get_payload())
+          encrypted_key = content.key()
+          sender_dev_cert = content.cert()
+          if verify_signature(sender_dev_cert, encrypted_key, content.sig()):
+            print "This mail is cannot be verified"
+          else:
+            key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
+            plaintext = AES_decrypt(content.body(), key)
+            print "This is mail #%d: " %(count)
+            print "Subject: "+subject
+            print "Payload:"
+            print plaintext
+            count = count + 1
 
     
     mail.close()
