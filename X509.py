@@ -87,7 +87,7 @@ class X509:
         return cert_pem, key_pem
 
     def validate_cert(self, cacert_pem): 
-        print cacert_pem
+        #print cacert_pem
         # Create an X509 object for cacert_pem (CA Certificate).
         cacert = X509.load_certificate_from_PEM(cacert_pem).get_certificate()[0]
         # Get the X509 object of this certifcate.
@@ -110,10 +110,10 @@ class X509:
         # Verify this cert with cacert
         try:
             crypto.verify(cacert, cert_sig, der_cert,sig_algo)
-            print "Certifcate Valid!"
+            #print "Certifcate Valid!"
             return True
         except crypto.Error as e:
-            print "Certrifcate Invalid: \n"+str(e)
+            #print "Certrifcate Invalid: \n"+str(e)
             return False
 
 '''Test X509 class

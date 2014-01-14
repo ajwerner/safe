@@ -60,14 +60,16 @@ class safe_mail(object):
       s = SafeUser()
       peerlist = s.get_peer_list()
       receiver_cert = None
-      for peer in peerlist:
-        if s.get_metadata(peer)['email'] == receiver:
-          receiver_cert = s.get_metadata(peer)['cert_pem']
+      if not s.metadata['email'] == receiver:
+        for peer in peerlist:
+            if s.get_metadata(peer)['email'] == receiver:
+                receiver_cert = s.get_metadata(peer)['cert_pem']
 
-      if receiver_cert == None:
-        print "Warning: Receiver is not in your peer list"
-        return
-
+            if receiver_cert == None:
+                print "Warning: Receiver is not in your peer list"
+                return
+      else:
+          receiver_cert = s.metadata['cert_pem']
       subject = raw_input("Please enter the email subject: ")
 
       if not message:
@@ -135,6 +137,7 @@ class safe_mail(object):
         
         subject = msg['Subject']
         #payload = msg.get_payload()
+        print ">>>>>>>>>>>>>>>>>>>>>>>>>>>> "+subject[:7] 
         if not safe_only:
           print "This is mail #%d: " %(count)
           print "Subject: "+subject
@@ -143,24 +146,27 @@ class safe_mail(object):
           count = count + 1
         
         elif subject[:7] == "(Safe)-":
+          print ">>> "+msg.get_payload()
           content = safe_mail_payload(**(ast.literal_eval(msg.get_payload())))
           encrypted_key = content.key
           sender_dev_cert = content.cert
-          device_id = content.dev_id
-          namespace = device_id.split('.')[0]
-          peer_ns_cert = None
-          for peer in s.get_peer_list():
-            peer_name = str(peer).split("#")[0]
-            if peer_name == namespace:
-              peer_ns_cert = s.get_metadata(peer)['cert_pem']
+          #device_id = content.dev_id
+          #namespace = device_id.split('.')[0]
+          #peer_ns_cert = None
+          #for peer in s.get_peer_list():
+          #  peer_name = str(peer).split("#")[0]
+          #  if peer_name == namespace:
+          #    peer_ns_cert = s.get_metadata(peer)['cert_pem']
               
-          if peer_ns_cert == None:
-            print "Warning: This mail is not sent from a trusted user"
-          else:
-            x = X509.load_certificate_from_PEM(sender_dev_cert)
-            if not x.validate_cert(peer_ns_cert):
-                print "Warning: This mail is not sent from a trutesd device"
+          #if peer_ns_cert == None:
+            #print ">> Warning: This mail is not sent from a trusted user"
+          #else:
+            #x = X509.load_certificate_from_PEM(sender_dev_cert)
+            #if not x.validate_cert(peer_ns_cert):
+                #print "Warning: This mail is not sent from a trutesd device"
           
+          x = X509.load_certificate_from_PEM(sender_dev_cert)
+          #print ">>>>>>>>>>>>>>>>> "+((x.get_certificate()[0]).get_issuer()).commonName
           try:
             if not verify_signature(sender_dev_cert, encrypted_key,
                 base64.decodestring(content.sig)):
