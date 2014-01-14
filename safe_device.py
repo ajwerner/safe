@@ -78,6 +78,15 @@ class SafeDevice():
     def __cmp__(self, other):
         return cmp(self.dev_id, other.dev_id)
 
+    def get_X509(self, safe_user, privkey_pem=None):
+        return X509(self.dev_name, 
+             crypto.load_privatekey(crypto.FILETYPE_PEM, privkey_pem), 
+             safe_user.conf['user_conf']['name'], 
+             safe_user.conf['user_conf']['country'],
+             safe_user.conf['user_conf']['state'],
+             safe_user.conf['user_conf']['city'],
+             crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem))
+
 '''Test Device class
 
 try:

@@ -71,27 +71,9 @@ class X509:
             self.cert.sign(signer_key, 'sha1')
 
     @classmethod
-    def load_certificate_from_keychain(cls, path, ns_name):
-        kc = KeyChain(path, ns_name, "1234")
-        rec = kc.read_keychain()
-        cert_pem = rec[0]
-        key_pem  = rec[1]
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
-        subject = cert.get_subject()
-        key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
-        return cls(None, key, None, None, None, None, cert)
-
-    @classmethod
     def load_certificate_from_PEM(cls, PEM_cert):
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, PEM_cert)
         return cls(None, None, None, None, None, None, cert)
-
-    def update_keychain(self, conf, keychain):
-        kc = KeyChain(conf, keychain, "1234")
-        cert_pem = crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert)
-        key_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, self.pkey)
-        if kc.write_keychain(cert_pem, key_pem) < 0:
-            raise X509Error("Certificate exists: "+keychain)
 
     def get_certificate(self):
         return self.cert, self.pkey

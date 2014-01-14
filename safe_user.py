@@ -196,21 +196,10 @@ class SafeUser(object):
                 self.conf['user_conf']['city'])
         x509.forge_certificate(False)
         x509.sign_certificate(None)
+        self.x509 = x509
         rec = x509.get_PEM_certificate()
         self.cert_pem = rec[0]
         self.privkey_pem  = rec[1]
-
-        if not x509.validate_cert(self.dev.cert_pem):
-            import ipdb; ipdb.set_trace()
-            self.dev_list.remove(self.dev)
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
-            privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
-            dev_x509 = X509.load_certificate_from_PEM(self.dev.cert_pem)
-            dev_x509.sign_certificate(cert, privkey)
-            self.dev.cert_pem = dev_x509.get_PEM_certificate()[0]
-            dev_privkey_pem = self.dev_kc.read_keychain()[1]
-            self.dev_kc.write_keychain(self.dev.cert_pem, dev_privkey_pem)
-            self.dev_list.add(self.dev)
 
         # set up the state keys
         self.state_key = Random.new().read(32)
@@ -218,6 +207,26 @@ class SafeUser(object):
         for dev in self.get_dev_list():
             self.state_keys[dev.dev_id] = b64encode(encrypt_with_cert(dev.cert_pem, self.state_key))
         self._secure_metadata()
+
+    def _validate_device_signature(self):
+        """ checks if the device certificate has been signed by the user x509
+        returns True if it is properly signed
+        otherwise:
+            signs the device cert, 
+            writes it back in the kc,
+            updates the device entry in the dev_list,
+            returns False (do a _reconcile_state after probably)
+        """
+        dev_x509 = self.dev.get_X509(self, self.dev_kc.read_keychain()[1])
+        if dev_x509.validate_cert(self.cert_pem):
+            return True
+        self.dev_list.remove(self.dev)
+        dev_x509.sign_certificate(*self.x509.get_certificate())
+        (cert_pem, privkey_pem) = dev_x509.get_PEM_certificate()
+        self.dev_kc.write_keychain(cert_pem, privkey_pem)
+        self.dev.cert_pem = cert_pem
+        self.dev_list.add(self.dev)
+        return False
 
     def _secure_metadata(self):
         self.metadata_key = Random.new().read(32)
@@ -285,6 +294,13 @@ class SafeUser(object):
         # Get the namespace keys
         self.cert_pem = AES_decrypt(self.serialized['cert_pem'], self.state_key)
         self.privkey_pem = AES_decrypt(self.serialized['privkey_pem'], self.state_key)
+        self.x509 = X509(None, 
+                         crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem), 
+                         self.conf['user_conf']['name'], 
+                         self.conf['user_conf']['country'],
+                         self.conf['user_conf']['state'],
+                         self.conf['user_conf']['city'],
+                         crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem))
 
         # Check the logs
         self.logs = self._read_logs()
@@ -328,14 +344,15 @@ class SafeUser(object):
             self.metadata_key = decrypt_with_privkey(self.privkey_pem, metadata_key)
 
         self.metadata = json.loads(AES_decrypt(self.serialized['metadata'], self.metadata_key))
-
         # drain the message queue and update keys accordningly
-        self._drain_message_queue()
+        if self._receive_messages() or not self._validate_device_signature():
+            self._reconcile_state()
 
-    def _drain_message_queue(self):
+    def _receive_messages(self):
+        """ receives messages from other peers and updates their information as requested """
         messages = self.sqs_queue.get_messages()
         if not messages:
-            return
+            return False
         for message in message:
             message_dict = json.loads(message)
             sender = None
@@ -352,7 +369,7 @@ class SafeUser(object):
             # What do we do about usernames here?
             new_sender_md_keys_index =  b64encode(hashlib.sha256(sender.cert_pem + sender.local_index).digest())
             self.metadata_keys[new_sender_md_keys_index] = b64encode(encrypt_with_cert(sender.cert_pem, self.metadata_key))
-        self._reconcile_state()
+        return True
 
     def get_metadata(self, peer_user):
         namespace_table = self.dynamo.get_table('namespaces')
@@ -389,10 +406,8 @@ class SafeUser(object):
         dev = json.loads(json_dev_str, cls=SafeDevice.DECODER)
         assert isinstance(dev, SafeDevice)
 
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
-        privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
-        dev_x509 = X509.load_certificate_from_PEM(dev.cert_pem)
-        dev_x509.sign_certificate(cert, privkey)
+        dev_x509 = dev.get_X509(self)
+        dev_x509.sign_certificate(*self.x509.get_certificate())
         dev.cert_pem = dev_x509.get_PEM_certificate()[0]
         self._add_device(dev)
 
