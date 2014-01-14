@@ -200,6 +200,18 @@ class SafeUser(object):
         self.cert_pem = rec[0]
         self.privkey_pem  = rec[1]
 
+        if not x509.validate_cert(self.dev.cert_pem):
+            import ipdb; ipdb.set_trace()
+            self.dev_list.remove(self.dev)
+            cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
+            privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
+            dev_x509 = X509.load_certificate_from_PEM(self.dev.cert_pem)
+            dev_x509.sign_certificate(cert, privkey)
+            self.dev.cert_pem = dev_x509.get_PEM_certificate()[0]
+            dev_privkey_pem = self.dev_kc.read_keychain()[1]
+            self.dev_kc.write_keychain(self.dev.cert_pem, dev_privkey_pem)
+            self.dev_list.add(self.dev)
+
         # set up the state keys
         self.state_key = Random.new().read(32)
         self.state_keys = {}
@@ -379,7 +391,7 @@ class SafeUser(object):
 
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, self.cert_pem)
         privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, self.privkey_pem)
-        dev_x509 = X509.load_certifacate_from_PEM(dev.cert_pem)
+        dev_x509 = X509.load_certificate_from_PEM(dev.cert_pem)
         dev_x509.sign_certificate(cert, privkey)
         dev.cert_pem = dev_x509.get_PEM_certificate()[0]
         self._add_device(dev)
