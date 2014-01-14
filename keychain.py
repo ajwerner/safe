@@ -148,10 +148,13 @@ class KeyChain:
         self.kc_file.flush()
         return KeyChain.SUCCESS
 
-    def update_keychain(self, cert):
+    def update_keychain(self, cert, priv_key):
         rec = self.read_keychain()
         key = rec[1]
-        encrypted_key = AES_encrypt(priv_key, self.key_enc_key)
+        if priv_key == None:
+            encrypted_key =  AES_encrypt(key, self.key_enc_key)
+        else:
+            encrypted_key = AES_encrypt(priv_key, self.key_enc_key)
         key_len = len(encrypted_key)
         cert_len = len(cert)
         self.kc_file.seek(0,0)

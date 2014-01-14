@@ -177,7 +177,16 @@ class SafeUser(object):
         self.serialized.put()
         # rereconcile because we just changed the remote state
         self._reconcile_state()
+        self._sign_and_update_dev_cert()
         return
+
+    def _sign_and_update_dev_cert(self):
+        x509 = X509.load_certificate_from_PEM(self.conf['dev_conf']['cert_pem'])
+        x509.sign_certificate(self.x509.get_certificate()[0], self.x509.get_certificate()[1])
+        self.metadata['cert_pem']
+        self.conf['dev_conf']['cert_pem'] = x509.get_PEM_certificate()[0]
+        self.dev.cert_pem = self.conf['dev_conf']['cert_pem']
+        self.dev_kc.update_keychain(self.dev.cert_pem, None)
 
     def _secure_state(self):
         """ 
