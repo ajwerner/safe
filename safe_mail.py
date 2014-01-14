@@ -29,13 +29,13 @@ class safe_mail_payload(object):
     self.sig = str(sig)
 class safe_mail(object):
 
-  def send(self, message=False, receiver_addr=False, encrypt=False):
+  def send(self, encrypt=False, message=False, receiver_addr=False):
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.ehlo()
     server.starttls()
     server.ehlo()
     #log in to the server
-    account = raw_input("Account: ")
+    account = raw_input("Please enter your account: ")
     server.login(account, getpass.getpass())
 
     if not receiver_addr:
@@ -43,18 +43,38 @@ class safe_mail(object):
     else:
       receiver = receiver_addr
 
-    subject = raw_input("Please enter the email subject: ")
+   #Send the mail
 
-    if not message:
-      body = raw_input("Please compose the email: ")
-    else:
-      body = message
-    #Send the mail
+    if encrypt == False:
+      
+      subject = raw_input("Please enter the email subject: ")
 
-    msg = MIMEText(body)
-    
+      if not message:
+        body = raw_input("Please compose the email: ")
+      else:
+        body = message
+ 
+      msg = MIMEText(body)
     
     if encrypt == True:
+      s = SafeUser()
+      peerlist = s.get_peer_list()
+      receiver_cert = None
+      for peer in peerlist:
+        if s.get_metadata(peer)['email'] == receiver:
+          receiver_cert = s.get_metadata(peer)['cert_pem']
+
+      if receiver_cert == None:
+        print "Warning: Receiver is not in your peer list"
+        return
+
+      subject = raw_input("Please enter the email subject: ")
+
+      if not message:
+        body = raw_input("Please compose the email: ")
+      else:
+        body = message
+        
       key=hashlib.sha256(str(random.randint(1,10000))).digest()
       #iv = Random.new().read(AES.block_size)
       #obj=AES.new(key, AES.MODE_CFB, iv)
@@ -62,9 +82,7 @@ class safe_mail(object):
       #body = base64.encodestring(body)
 
       body = AES_encrypt(body, key)
-
-      s = SafeUser()
-      receiver_cert = s.get_metadata(s.get_peer_list()[0])['cert_pem']
+     
       encrypted_key = encrypt_with_cert(receiver_cert, key)
       signature = sign_with_privkey(s.dev_kc.read_keychain()[1], encrypted_key)
       signature = base64.encodestring(signature)     
@@ -86,6 +104,9 @@ class safe_mail(object):
     #msg.attach(MIMEText(body, 'plain'))
     text = msg.as_string()
     server.sendmail(account+"@gmail.com", receiver, text)
+    print "-----------------------"
+    print "Email Successfully Sent"
+
 
   def receive(self, safe_only=False):
 
@@ -93,7 +114,7 @@ class safe_mail(object):
     num = input("Please enter how many email you wish to receive: ")
     
     mail = imaplib.IMAP4_SSL('imap.gmail.com')
-    mail.login(raw_input("Account: "), getpass.getpass())
+    mail.login(raw_input("Please enter you account: "), getpass.getpass())
     
     mail.select('inbox')
     typ, data = mail.search(None, 'ALL')
@@ -161,5 +182,9 @@ class safe_mail(object):
     mail.close()
     mail.logout() 
 
-  def list_peer():
-    return
+  def list_peer_email(self):
+    s = SafeUser()
+    peer_list = s.get_peer_list()
+    for peer in peer_list:
+      print "\nPeer Contact List: "
+      print str(peer).split("#")[0]+": "+ str(s.get_metadata(peer)['email'])
