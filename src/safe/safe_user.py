@@ -161,8 +161,8 @@ class SafeUser(object):
         # Initial remote serialization creation
         self.uid = b64encode(uuid4().bytes)
         self._peer_list = SafeList("", cls=SafePeer)
-        self.dev_list = SafeList("", cls=SafeDevice)
-        self.dev_list.add(self.dev)
+        self._dev_list = SafeList("", cls=SafeDevice)
+        self._dev_list.add(self.dev)
         self.old_identities = []
         # set up the security on this state
         self._secure_state()
@@ -215,14 +215,14 @@ class SafeUser(object):
         dev_x509 = self.dev.get_X509(self, self.dev_kc.read_keychain()[1])
         if dev_x509.validate_cert(self.cert_pem):
             return True
-        self.dev_list.remove(self.dev)
+        self._dev_list.remove(self.dev)
         cert, privkey = self.x509.get_certificate()
         dev_x509.sign_certificate(cert, privkey)
         dev_cert_pem, dev_privkey_pem = dev_x509.get_PEM_certificate()
         self.dev_kc.write_keychain(dev_cert_pem, dev_privkey_pem)
         self.dev.cert_pem = dev_cert_pem
         print self.dev.cert_pem
-        self.dev_list.add(self.dev)
+        self._dev_list.add(self.dev)
         assert dev_x509.validate_cert(self.cert_pem)
         return False
 
@@ -244,7 +244,7 @@ class SafeUser(object):
             'old_identities': AES_encrypt(json.dumps(self.old_identities), self.state_key),
             'state_keys': json.dumps(self.state_keys),
             'ns_list': AES_encrypt(self._peer_list.serialize(), self.state_key),
-            'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
+            'dev_list': AES_encrypt(self._dev_list.serialize(), self.state_key),
             'metadata_keys': json.dumps(self.metadata_keys),
             'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
             'uid': AES_encrypt(self.uid, self.state_key),
@@ -325,9 +325,9 @@ class SafeUser(object):
         # Get the device list
         dec_dev_list = AES_decrypt(self.serialized['dev_list'], self.state_key)
         if hasattr(self, 'dev_list'):
-            self.dev_list.update_from_serialization(dec_dev_list)
+            self._dev_list.update_from_serialization(dec_dev_list)
         else:
-            self.dev_list = SafeList(dec_dev_list, SafeDevice)
+            self._dev_list = SafeList(dec_dev_list, SafeDevice)
 
         # get the uid
         self.uid = AES_decrypt(self.serialized['uid'], self.state_key)
@@ -388,7 +388,7 @@ class SafeUser(object):
 
     @transaction
     def _add_device(self, device):
-        self.dev_list.add(device)
+        self._dev_list.add(device)
         self.state_keys[device.dev_id] = b64encode(encrypt_with_cert(device.cert_pem, self.state_key))
 
     def add_device(self):
@@ -438,7 +438,7 @@ class SafeUser(object):
 
     @property
     def dev_list(self):
-        return self.dev_list.get_list()
+        return self._dev_list.get_list()
 
     @property
     def peer_list(self):
@@ -488,7 +488,7 @@ class SafeUser(object):
 
     @transaction
     def _remove_device(self, device):
-        self.dev_list.remove(device)
+        self._dev_list.remove(device)
         if self.old_identities:
             self.old_identities = [(self.cert_pem, self.privkey_pem)] + self.old_identities
         else:
