@@ -229,7 +229,7 @@ class SafeUser(object):
     def _secure_metadata(self):
         self.metadata_key = Random.new().read(32)
         self.metadata_keys = {}
-        for peer in self.get_peer_list():
+        for peer in self.peer_list:
             index = b64encode(hashlib.sha256(peer.cert_pem + peer.local_index).digest())
             self.metadata_keys[index] = b64encode(encrypt_with_cert(peer.cert_pem, self.metadata_key))
         # be careful about these 
@@ -480,7 +480,7 @@ class SafeUser(object):
         self._init_aws()
 
         update_msg = json.dumps({"event": "keys_changed", "id": self.id})
-        for peer in self.get_peer_list():
+        for peer in self.peer_list:
             queue = self.sqs.get_queue(peer.id)
             if queue:
                 self.sqs.send_message(queue, update_msg)
