@@ -76,7 +76,7 @@ class SafeUser(object):
                   'metadata_keys', 'metadata', 'uid']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
-    def __init__(self, conf_dir="/".join(expanduser("~"), ".safe_config"), credentials_csv_path=None):
+    def __init__(self, conf_dir="/".join((expanduser("~"), ".safe_config")), credentials_csv_path=None):
         conf, dev, dev_kc = get_config(conf_dir, credentials_csv_path=credentials_csv_path)
         self.conf = conf
         self.dev = dev
