@@ -1,11 +1,6 @@
 from safe_user import SafeUser
 from peer_ns import SafePeer
-from tofu import *
 import sys, getopt
-
-def ns_controller_add_ns(ns):
-    tc = tofu(input_callback)
-    ns.add_peer(tc)
 
 def main(argv):
     ns = SafeUser()
@@ -20,7 +15,7 @@ def main(argv):
             print '-a, --add-ns Adds a Namespace in to SafePeer list.'
             sys.exit()
         elif opt in ("-a", "--add-ns"):
-            ns_controller_add_ns(ns)
+            ns.add_peer()
             sys.exit()
 
 if __name__ == "__main__":
