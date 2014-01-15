@@ -1,0 +1,55 @@
+\setcounter{secnumdepth}{4}
+
+\section{Implementation}
+
+Safe is implemented as a client library in Python that utilizes untrusted cloud storage for synchronization, message passing, and storage. We use this library to implement a secure email client.
+
+The client library is written in easy to use Python. 
+It's astonishingly simple API can be found in \ref{appendix:api}.
+The library relies on a mixtures of OpenSSL \cite{openssl} and PyCrypto \cite{pycrypto} for cryptography.
+
+The library utilizes local storage and Amazon's DynamoDB to store the state of the system.
+All remote state for a namespace is stored in a single row the the DynamoDB table.
+DynamoDB offers the option to perform all operations with strong consistency, an option we always choose.
+In the local storage the client stores a passcode encrypted keychain that encodes the device's X509 certificate and private key, the account configuration file (aws credentials, certificate information, etc.), and the log of signatures that the device stores to make sure nobody has forked the state.
+
+All operations that modify the state of the account do so with all-or-none transaction semantics.
+All functions in the \textbf{SafeUser} class that potentially modify the state of namespace are decorated as transactions. 
+The \textbf{SafeUser} has a direct mapping between its in-memory state and its encrypted, serialized state. 
+The transaction decorator applies all transformation functions as conditional puts to the remote state. 
+If a conditional put fails, the namespace reconciles its in-memory state with the remote state, then it retries the function.
+Every time a transaction attempts a conditional put, it appends the signature of the namespace to a signature logs vector that is stored in the encrypted namespace state (assuming it doesn't match the top entry). 
+The device performing the put will also write this log to its local disk.
+
+Every time a SafeUser reconciles its state with the remote storage it ensures that it's log entries match logs of the remote state and that the remote state was properly signed.
+
+This storage model achieves protection from attacks against privacy, forgery, and data freshness attacks while facilitating the detection of fork attacks. This is comparable to the security provided by SUNDR \cite{sundr} which inspired the design of Safe's security protocols.
+
+One observation is that by relying on cloud infrastructure we make no systematic guarantees about availability. 
+That being said, the system's availability relies on Amazon AWS's availability and there are strong market forces which push Amazon to provide highly available services. 
+Furthermore Amazon advertises their storage system as offering high availability and scalability\cite{dynamodb}.
+
+Beyond storage, the safe also utilize Amazon's Identity and Access Management. 
+The library does not rely on Amazon's access control in order to acheive its security goals but without
+external access control, it has very little protection from potential attacks that deny access to service or consume resources.
+As noted above, we don't provide expectations on availability, but that being said, we also don't have any reason to believe that Amazon would use it's access control system in a dishonest way. The trade-off with protecting resources using specific IAM access control policies to expressly allow access to trusted users is that it would leak some information. 
+At current only a minimum access control policy is applied to users and the rest of the security is left to cryptography and obscurity. 
+
+In addition to IAM and DynamoDB, the system uses Amazon Simple Queue Service (SQS) and Simple Scalable Storage (S3). SQS is used to notify peer namespaces that there has been a change in identity for the namespace and that it ought to update its records (because there exists a device who has had access to keys that can read the information). 
+Even this is not really a major concern because when devices are remove, their AWS access keys are revoked. 
+Additionally all peers drain their message every time they reconcile state or attempt to modify the state.
+
+Unfortunately Amazon imposes a restriction that each account possess at most 2 access keys. 
+It is important from a security perspective that when a device is removed, that its access to read or write to the state is also removed. 
+The device responsible for removing another device must leave AWS credentials for all other trusted devices in the account. This is accomplished using an S3 public bucket. The bucket configured such that all items it contains have a maximum life of 30 days.
+Each device has a unique identifier within the namespace. The removing namespace will leave a json dictionary at an index derived from the SHA-256 hash of the unique identifier of the user and the day the key was left. Inside the document will have a pubkey-encrypted copy of an AES key to decrypt AWS credentials.
+Devices that have not reconciled in 30 days will need to be re-added to the account.
+
+\subsection{Safe\_Mail}
+We have implemented a secure email application called Safe\_Mail on top of our Safe library. Safe\_Mail can send both ordinary unencrypted email and encrypted email. When the sender specifies to send an encrypted email, Safe\_Mail would first randomly generate a msg\_key and encrypted the email content by AES with that msg\_key. Then, Safe\_Mail 
+will go through the user's metadata to find the corresponding peer of the entered email address. Should the peer is found, Safe\_Mail would fetch the receiver's certificate and use the public key that is stored in the certificate to encyrpt the msg\_key to ensure only the specified receiver, who owns the corresponding private key would be able to decrypt the email content. This encrypted msg\_key would be further signed by the sending device's private key so the receiver can ensure this email is sent from the alleged sender.
+Finally, the sender's safe user name, the device name, the encrypted email content, the encrypted msg\_key, the sender's device public key, and the signed signature of the key would be combined as a JSON string sent to the receiver.
+The receiver can verify and decrypt the email content with a similar fashion.
+
+Since all the cryptographic related operation is hidden from the user, using Safe\_Mail is as easy as using any existing email applications except for it comes with great security properties. 
+
