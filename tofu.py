@@ -30,18 +30,15 @@ class tofu(object):
         self.enc=''
         self.msg_queue = []
         self.prefix = base64.b64encode(Random.new().read(PREFIX_LEN))[:PREFIX_LEN]
-
         self.recv_thread = None
         self.connected = threading.Event()
         self.secured = threading.Event()
         self.lock = threading.RLock()
         self.condition = threading.Condition(self.lock)
         self.condition.acquire(1)
-
         self.DH = DiffieHellman()
         self._listen()
         self._send(hex(self.DH.publicKey))
-
         self.condition.wait()
         self.condition.release()
 
@@ -112,6 +109,8 @@ class tofu(object):
         else:
             body = base64.b64decode(body)
             key=hashlib.sha256(self.secret_value).digest()
+            print "Please confirm this seceret value out of bound with the other party: "
+            print base64.b64encode(hashlib.sha256(key).digest())[:10]
             iv=body[:AES.block_size]
             cipher = AES.new(key, AES.MODE_CFB, iv)
             msg=cipher.decrypt(body[AES.block_size:])
@@ -127,6 +126,17 @@ class tofu(object):
             self.connected.clear()
         sys.exit()
     
+    def send(self, message):
+        tojid=self.receiver
+        key=hashlib.sha256(self.secret_value).digest()
+        iv = Random.new().read(AES.block_size)
+        obj=AES.new(key, AES.MODE_CFB, iv)
+        text=iv+obj.encrypt(message)
+        text=base64.encodestring(text)
+        self._send(text)
+ 
+
+
     def receive(self):
         try:
             if not self.connected.is_set():
@@ -141,70 +151,4 @@ class tofu(object):
         self.connected.clear()
         self.recv_thread.join()
 
-    def send(self, message):
-        #BS = 16
-        #pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
-        tojid=self.receiver
-        
-
-        #padding the message and encrypting it
-        # text=pad(message)
-        key=hashlib.sha256(self.secret_value).digest()
-        iv = Random.new().read(AES.block_size)
-        obj=AES.new(key, AES.MODE_CFB, iv)
-        text=iv+obj.encrypt(message)
-        text=base64.encodestring(text)
-        self._send(text)
-        # jid = xmpp.protocol.JID(self.j_id)
-        # cl = xmpp.Client(jid.getDomain(), debug=[])
-
-        # try:
-        #     con=cl.connect(server=('talk.google.com', 5222))
-        # except IOError as e:
-        #     print e
-        # if not con:
-        #     print 'could not connect!'
-        #     sys.exit()
-        # #print 'connected with', con
-        # auth = cl.auth(jid.getNode(), self.j_pwd,
-        #         resource=jid.getResource())
-        # if not auth:
-        #     print 'could not authenticate!'
-        #     sys.exit()
-        # #print 'authenticated using', auth
-
-        # cl.send(xmpp.protocol.Message(tojid,text))
-        #cl.disconnect()
-
-    
-    # def listen(self): 
-
-    #    if self.connected.isSet():
-    #         return
-
-    #    jid=xmpp.protocol.JID(self.j_id)
-    #    cl=xmpp.Client(jid.getDomain(),debug=[])
-
-    #    con=cl.connect(server=('talk.google.com', 5222))
-    #    if not con:
-    #       raise Exception("could not connect to server")
-    #    #print 'connected with', con
-    #    auth=cl.auth(jid.getNode(), self.j_pwd,
-    #    resource=jid.getResource())
-    #    if not auth:
-    #       raise Exception("could not authenticate jabber account %s!" % self.j_id)
-    #    #print 'authenticated using', auth
-
-    #    cl.sendInitPresence(requestRoster=0)
-
-    #    cl.RegisterHandler('message', self.messageCB)
-
-    #    self.connected.set()
-    #    self.recv_thread = threading.Thread(target=self.GoOn, args=(cl,))
-    #    self.recv_thread.daemon = True
-    #    self.recv_thread.start()
-
-    #    return
-        
-        
-    
+  

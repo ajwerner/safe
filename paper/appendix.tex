@@ -1,0 +1,25 @@
+\setcounter{secnumdepth}{4}
+\appendix
+\section{Appendix}
+\subsection{API}
+\label{appendix:api}
+\begin{figure}[h]
+\begin{lstlisting}[language=Python]
+class SafeUser(object):
+    def __init__(self, conf_dir="~/.safe_config"):
+    def add_device(self):
+    def remove_device(self, device):
+    def add_peer(self):
+    def remove_peer(self, peer):
+    def get_metadata(self, peer_user):
+    def update_metadata_key(self, key, value):
+    @property
+    def dev_list(self):
+    @property
+    def peer_list(self):
+    
+PEER_PROPERTIES = ['id', 'user_name', 'cert_pem']
+DEVICE_PROPERTIES = ['dev_id', 'dev_name', 'cert_pem']
+\end{lstlisting}
+\caption{The extremely user friendly API exported by Safe}
+\end{figure}

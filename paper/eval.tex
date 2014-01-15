@@ -1,0 +1,34 @@
+\setcounter{secnumdepth}{4}
+
+\section{Evaluation}
+\label{sec:eval}
+
+Evaluation of the project has three aspects to it, security, user experience and performance.  
+
+\subsection{Threat Model}
+
+\subsubsection{Attacker establishing trust with the namespace }
+In Safe attacker may attempt to gain trust either as a device or a peer namespace. Bootstrapping trust in Safe is done via invitations and trust on first use basis. By design system needs two parties to bootstrap trust, for instance adding a device to a namespace involves two devices, a device already in the namespace and the new device expecting to come under the namespace. Thus person or a device needs to gain trust cannot do it alone, they first need to communicate with the authorized party out of band and learn a shared secret. This gives an attacker an opportunity to access  sensitive information by Launching a man in the middle attack and impersonating the device requesting trust or device granting trust
+Since our ToFU (Trust on First Use) module exchanges keys between two end points and displays the hashes of the key on the display for users to verify after exchanging an out-of-band means, the verification will fail if their had been a man in the middle. Therefore MITM attacks impersonating the other device would fail.
+
+\subsubsection{Attacker accessing sensitive data and state information stored in the centralized storage (Amazon DynamoDB)}
+Gaining trust as a peer namespace will not compromise namespace state as naemspace state is encrypted with the state key and access controlled by AWS credentials. Even if AWS credentials get compromised the attacker will have to decrypt every field in the DynamoDB since all the fields are encrypted with an AES key (state\_key). 
+
+Also Safe does not support web of trust among multiple namespaces, therefore Alice will not trust Evil even if Alice happens to trust Mal who is in-turn trusted by Evil. Therefore even if malicious user with a namsepace gains trust of another namespace a user trusts they are compartmentalized.
+
+
+\subsection{User Experience}
+User experience in safe includes both end user and software developer perspectives. 
+
+\subsubsection{Software Developers Perspective}
+From software developers standpoint, Safe is an easy to use library. It exposes an API to manage devices and an API to validate device certificates. Safe does not expect developers to  know any cryptographic sorcery beyond that. They can simply use Safe API and underlying crypto happens the best way inside the library.
+
+\subsubsection{End User Persepective}
+A user of this system could be a Single user with bunch of devices and friends (a laptop, a phone and a tablet), or an organization with 1000s of employees. In both cases Safe hides key management and keys altogether. In any of our command line UIs we do not expose the user to a single cryptographic object, all we ask is a random string communicated when pairing a device or a namespace and that's just one time operation. Users also can remove a compromised device as soon as they figures out that a device has been compromised due to theft.
+
+For a large organization we can provide a feature to disable private key of the namespace being shared with the devices. This will prevent disgruntled employees from signing other certificates with the organizations private key. Also we effectively compartmentalize devices owned by employees and can be used to secure (authenticated, non-refutable and private) communication within and beyond the organization. Again as expected no one will deal with keys.
+
+\subsection{Performance}
+Safe relies on local devices to perform end to end encryption, Amazon's DynamoDB to store encrypted state. Device and namespace pairing depends on performance of RSA, AES cryptography and DynamoDBs put operations. 
+
+However we believe device removal has the biggest cost involved due to re-encryption of the namespace state and multiple update operations on the storage. And cost of this operation grows with linearly with the number of devices we have in the namespace because public key cryptography dominates the cost of operation. But we believe this is acceptable because we assume that users will rarely lose their devices.

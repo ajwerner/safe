@@ -1,0 +1,22 @@
+\begin{comment}
+When we want to remove a device, we need to revoke its access to the SafeUser state. 
+In order to do this, 1) remove his entry into the state\_keys field, 2) create a new state key to re-encrypt the state with, 3) remove the entry from the dev\_list and 4) create a new X.509 identity for the namespace
+
+The thing is that now the removed device still has viable AWS crendentials on the account and could be used to put invalid content into the state in Dynamo. This could be easily remedied by changing the AWS credentials for the user and putting them in a public place using public key cryptography for the devices. This is not currently implemented but should not be considered a fundamental security flaw in the design.
+
+The problem however is that the namespace X509 identity was the tool for accessing the information of trusting peer namespace. 
+Although Alice's now has a new namespace identity, other namespaces will know this immediately and Alice doesn't have the permissions to update anything in other SafeUser's state.
+To cope with this, we save the state keys as an array, caching old invalid keys to access metadata that was encrypted for the old identity. 
+This means that the removed device will still have access to information about users that should not trust it anymore for some time.
+
+To combat this we use a simple messaging system built on Amazon SQS to inform peers that they should update the credentials protecting the metadata keys. 
+We do not consider this a leak because any updates made to metadata of a peer will first make sure to clear the message queue and update all the keys to the most recent.
+
+Thus except in very small corner cases, removed devices will never be able to access content that was created after their removal. Furhtermore, implementing a system for updating credentials would mitigate this problem even further.
+
+This way we can provided the expected user experience.
+
+
+Our cryptography gaurentees confidentiality but may be suceptable to many denial of service style attacks.
+Fortuntely we can also leverage Amazon's impressive access control system to lock down and prevent unwanted traffic in the system.
+\end{comment}
