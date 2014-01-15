@@ -1,0 +1,52 @@
+\section{Design}
+\label{sec:design}
+
+As briefly introduced, the main abstraction offered by Safe is the Namespace associated with SafeUser. A Namespace, along with the devices associated with it, encapsulate a user's identity and trust relationships in the network. In this section let's look at how these abstractions manifest underlying cryptographic operations.
+
+\subsection{Namepsaces and Devices}
+A Namepace can be viewed as an entity with four primitives for adding/removing devices and adding/removing namespaces of other trusted users, a name (SafeUser ID), an X.509 certificate which is reffered to as a master certificate, a list of associated devices and a list of associated namespaces.
+
+A device is an entity representing a physical device and includes a name and an X.509 certificate. Private key associated with the SSL certificate will be stored in the device's local storage encrypted with a pass-phrase provided by the user.
+
+All four primitives supported in Safe are transactional with nothing or all semantics.
+
+\subsubsection{Namespace creation}
+On first use, the user will enter information for his namespace certificate as required in X.509 specification. Additionally it prompts for information about the device the user is using to create this namespace to create an X.509 certificate for the device and adds it to the namespace as the initial device. Namespace metadata including it's private key is encrypted with a state\_key (an AES key) and stored in a central server. In addition device and user information is stored locally on the device. 
+
+\subsubsection{Adding a Device to the Namspace}
+By adding a device to a namespace we establish trust between a namespace of a user and a device owned by that user. When a device is added to the namespace, the device's X.509 certificate is signed with the namespace private key and device information is added to the the device list of the namespace. In addition the newly added device will receive credentials to access the cloud storage to retrieve namespace state. Data transfers between two devices involved will happen over a secure, encrypted channel discussed in \ref{sec:tofu} To allow namespace data to be accessed by the device, the 'state\_key' of the namespace will be encrypted with the device's public key and stored in the cloud storage in the state\_keys map indexed by the a cryptographic hash of the device's public key and a random identifier associated with the device when it joins the namespace. This way, the device can unlock the namespace state information by decrypting the state\_key with it's private key. 
+
+\subsubsection{Deleting a Device from the Namespace}
+When devices are being removed from the namespace, we ensure that it's access to the namespace state is revoked. Thus it will not be able to query the namespace state stored in the cloud storage from that point on and all the other devices and peer namespace will learn that it is no longer a part of the relationship model. In order to do this, we take following steps.
+
+\begin{description} 
+\item[1] Remove device's entry into the state\_keys map.
+\item[2] Remove the device's entry from the device list.
+\item[3] Create a new state\_key to re-encrypt the namespace state with.
+\item[4] Encrypt the state\_keys for each trusted device
+\item[5] Create a new X.509 identity for the namespace and re-encrypt the namespace's state with the newly generator state\_key.
+\item[6] Create a new set of AWS access keys and delete the old access keys
+\item[7] Drop encrypted AWS credentials in the drop box for all still-trusted devices
+\item[8] Notify trusted peers that there has been an identity update for this SafeUser
+\end{description}
+
+However above steps only guarantee that removed device will have no access to the future states of the namespace, unless credentials to access the storage is not modified (and assuming the removed user could get his hands on new AWS credentials).
+
+The problem however is communicating the namespace's new X.509 identity to other namespaces (peer namespaces) known to it. In Safe the solution is notifying the change in X.509 identity via message queue associated with namespace. The SafeUser will receive a message informing him that the a specific peer has updated his identity. The SafeUser will then retrieve the certificate from the metadata of that peer and update the entry in metadata keys.
+Message queues are drained before any state changes are committed so except in very small corner cases, removed devices will never be able to access content that was created after their removal.
+
+That being said, the namespaces caches old identities so that after a user removes a device he does not lose access to any peers (although it will warn that an old key is being used).
+
+\subsubsection{Adding a Peer-Namespace to the Namespace}
+Adding a namespace is simply a transfer of Namespace X.509 certificates between two namespaces establishing trust. When each namespace has X.509 certificates of their trusted peers they can implicitly establish trust with devices owned by them. Once two participating peer namespaces receive each others X.509 certificates and namespace ids, they each will add this information to their peer namespace list. These X.509 certificates are used by applications to validate device certificates when devices of other namespaces try to authenticate them selves claiming that they belong to a known namespace \textit{N}. 
+
+\subsubsection{Deleting a Peer-Namespace from the Namespace}
+This operation is simple and deletes the Peer Namespace object (X.509 certificate and the namespace id) from the peer namespace list. Once such entry corresponding to a namespace is removed,  device X.509 certificates of a device that belongs to the removed namespace will not be validated and the application may raise a warning.
+
+\subsubsection{Safe, Trust on First Use}
+\label{sec:tofu}
+When two users wish to add each other as peers, they need a secure way to exchange their certificates in order to verify the the identity of trustworthiness of future interactions. Sending this certificate through most communication channels however, is susceptible to man-in-the-middle attacks. To achieve this secure trust establishment, we built a secure channel using Diffie-Hellman key exchange on top of an insecure jabber channel, combined with an out-of-band shared secret confirmation mechanism.
+
+Whenever two party need to establish trust, Diffie-Hellman would perform a key exchange for them. The key would first be passed into a cryptographic hash function to generate a shared secret value and then stored securely in their local machine. The generated shared secret value will be displayed on their screen, and the two party should verify this secret value with each other through whatever out-of-band channel they prefer (in-person, cell phone, Skype, etc). After the secret value is verified, Safe would then encrypt their certificate with the key derived from the Diffie-Hellman exchange and send it to the other party through jabber.
+
+

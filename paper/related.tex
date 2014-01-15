@@ -1,0 +1,6 @@
+\section{Related Work}
+\label{sec:related}
+
+Safe offers many of the same usability primitives as UIA \cite{uia} but is also in some ways antithetical to UIA because it operates completely on Amazon managed infrastructure. That being said Safe actually implements a much more useful naming system in that it also provides security credentials and identity guarantees on all users available to it.
+
+The data security and fork consistency draws heavily on the work in SUNDR \cite{sundr}. We implement a similar encryption and modification signature-logging scheme to provide the security guarantees in the face of privacy, forgery, or rollback attacks and detection of forking. 

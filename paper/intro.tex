@@ -1,0 +1,30 @@
+\section{Introduction}
+\label{sec:intro}
+
+
+Now more than ever we are aware of the extent to which Internet traffic is monitored and recorded by unexpected third parties. Despite the fact that effective cryptosystems have been around for a very long time, very few modern web users utilize cryptography or take measures to protect their information. The reasons for such low adoption of security standards are varied but past studies point to their confusing, unapproachable user interfaces and their inconvenience \cite{Jhonny, paranoia}. 
+
+Proper uses of GPG or PGP requires understanding of how the security properties are derived from cryptographic primitives such as signatures, certificates, etc \cite{pgp, gpg}. The other major problem with these systems is inconvenience such as flagging email messages and setting up software that prompts user for inputs that are quite arcane \cite{paranoia}. In addition to usability issues, modern users also have multiple devices which communicate with other users who also own  multiple devices.
+
+Apart from the inconvinience, it has also been the case that average computer users leak their private keys due to ignorance or confuse them with public keys when using crypto systems for a considerably long durations \cite{Jhonny}. These issues may arise either due to lack of understanding of private and public key pairs or mere confusion caused by a badly designed software interfaces related to public key cryptography. Therefore we believe that such cryptographic systems should have user interfaces where users are not presented directly with cryptographic primitives unfamiliar to them. Instead they should be presented a model which they could understand with a help of a metaphor they are familiar with.
+
+Furthermore, key servers and other entities rely on Certificate Authorities (CAs) to bootstrap trust but there are many problems with CAs ranging from the level of trust to their ability to actually verify identification. We don't trust certificate authorities due to issues mentioned in\cite{certlies, SoK} such as compelled CA attacks, difficulty of reaching an agreement between users and application vendors regarding which CAs should be trusted by applications and lack of due diligence by CAs when issuing certificates.
+
+On the other hand modern computer users have many devices and it is important to have uniform functionality across all devices for a pleasant user experience.
+Traditional key management approaches are poorly suited to deal with multiple devices. To do this with PGP, a user will have to first generate key pairs in her primary device, export and import them to all other devices she uses. On the other hand, an average computer user expecting privacy with respect to her email communications find it difficult to generate PGP key pairs for a single computer \cite{Jhonny} let alone sharing such keys on multiple devices.
+
+The goal of this project is to simplify the basic primitives of security so as to facilitate widespread, properly-applied adoption of modern security practices among non-technical users. In addition, we hide the complexity of the key management process across multiple devices and the notion of keys itself through a powerful relationship abstraction between computing devices and users. Therefore rather than exposing traditional cryptographic primitives in our library, we provide a model that users are familiar with. This model is defined based on relationships between users and devices, such as owned by (iPhone owned by Alice) and known to (Alice is known to Bob) relationships.
+
+\subsection{Owned by Relationship}
+A user in this system is associated with a Namespace, she claims this namespace via a user account which we refer to as a SafeUser account. She first creates a user account which implicitly creates a namespace just for her and then she brings all the devices she belongs under this namespace. User will not even see a cryptographic key or a hash when doing this. Similarly with ease users are allowed to remove devices from this namespace at their will.
+
+\subsection{Known to Relationship}
+After a user has set up his account and a namespace, she is allowed to add other SafeUsers as trusted peers and remove them later if need arises. Establishing and removing of trust happens naturally and  cryptographic keys and hashes are completely hidden from the user. Once trust has been established, a user can look up information about a peer.
+
+An overview of the abstractions are presented in section \ref{sec:design}. This contact-list style interface users work with is much easier for them to reason about than keys, organizations, and webs of trust.
+
+\subsection{Managing Relationships}
+Managing arbitrary trust relationships across a variety of devices is very difficult to do securely. Safe is able to offer such a convenient interface because it offers simplified a simplified trust model and because leverages Amazon AWS infrastructure as a source of truth. AWS offers a fast, scalable, convenient data storage but in general provides no security guarantees. 
+Safe implements a fork consistency on all data while providing privacy on all content entering Amazon's system by using strong encryption. Utilizing AWS in this manner Safe gains the reliability of extremely tested production storage systems while implementing the security layer on top.
+
+An analysis of the security properties of the system are presented in section \ref{sec:eval}
