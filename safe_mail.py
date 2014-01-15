@@ -13,8 +13,6 @@ import ast
 import X509
 from configuration import *
 from safe_user import *
-#from email.MIMEMultipart import MIMEMultipart
-#from email.MIMEText import MIMEText
 from email.mime.text import MIMEText
 from keychain import *
 from Crypto import Random
@@ -128,7 +126,8 @@ class safe_mail(object):
     #get the most recent email id
     latest_email_id = int( id_list[-1] )
 
-    count = 1
+    total_count = 1
+    safe_count = 1
     #iterate messages through descending order
     for i in range( latest_email_id, latest_email_id-num, -1 ):
         typ, data = mail.fetch( i, '(RFC822)' ) 
@@ -139,12 +138,14 @@ class safe_mail(object):
         subject = msg['Subject']
         #payload = msg.get_payload()
         if not safe_only:
-          print "This is mail #%d: " %(count)
+          print "---------------------  START OF MESSAGE  ---------------------"
+          print "This is mail #%d: " %(total_count)
           print "Subject: "+subject
           print "Payload:"
           print msg.get_payload()
-          count = count + 1
-        
+          total_count = total_count + 1
+          print "---------------------  END OF MESSAGE  ---------------------"
+
         elif subject[:7] == "(Safe)-":
           content = safe_mail_payload(**(ast.literal_eval(msg.get_payload())))
           encrypted_key = content.key
@@ -152,6 +153,7 @@ class safe_mail(object):
           device_id = content.dev_id
           namespace = device_id.split('.')[0]
           peer_ns_cert = None
+          
           for peer in s.get_peer_list():
             peer_name = str(peer).split("#")[0]
             if peer_name == namespace:
@@ -172,11 +174,11 @@ class safe_mail(object):
               print "---------------------  START OF MESSAGE  ---------------------"
               key = decrypt_with_privkey(s.privkey_pem, encrypted_key)
               plaintext = AES_decrypt(content.body, key)
-              print "This is mail #%d: " %(count)
+              print "This is mail #%d: " %(safe_count)
               print "Subject: "+subject
               print "Payload:"
               print plaintext
-              count = count + 1
+              safe_count = safe_count + 1
               print "---------------------  END OF MESSAGE  ---------------------"
 
           except:
