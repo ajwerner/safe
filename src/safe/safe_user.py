@@ -199,7 +199,7 @@ class SafeUser(object):
         # set up the state keys
         self.state_key = Random.new().read(32)
         self.state_keys = {}
-        for dev in self.get_dev_list():
+        for dev in self.dev_list:
             self.state_keys[dev.dev_id] = b64encode(encrypt_with_cert(dev.cert_pem, self.state_key))
         self._secure_metadata()
 
@@ -354,7 +354,7 @@ class SafeUser(object):
         for message in message:
             message_dict = json.loads(message)
             sender = None
-            for peer in self.get_peer_list():
+            for peer in self.peer_list:
                 if peer.id == message_dict['id']:
                     sender = peer
                     break
@@ -462,7 +462,7 @@ class SafeUser(object):
         enc_aws_conf = AES_encrypt(json.dumps(new_aws_conf), aes_key)
 
         bucket = self.s3.get_bucket(S3_DROPBOX_BUCKET)
-        for dev in self.get_dev_list():
+        for dev in self.dev_list:
             key_str = urlsafe_b64encode(hashlib.sha256(time.strftime("%d/%m/%Y") + dev.dev_id).digest())
             key = bucket.new_key(key_str)
             contents = {"key": b64encode(encrypt_with_cert(dev.cert_pem, aes_key)), 

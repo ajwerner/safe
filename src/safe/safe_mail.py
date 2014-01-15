@@ -56,7 +56,7 @@ class safe_mail(object):
     
     if encrypt == True:
       s = SafeUser()
-      peerlist = s.get_peer_list()
+      peerlist = s.peer_list
       receiver_cert = None
       if not s.metadata['email'] == receiver:
           if not peerlist:
@@ -154,7 +154,7 @@ class safe_mail(object):
           namespace = device_id.split('.')[0]
           peer_ns_cert = None
           
-          for peer in s.get_peer_list():
+          for peer in s.peer_list:
             peer_name = str(peer).split("#")[0]
             if peer_name == namespace:
               peer_ns_cert = s.get_metadata(peer)['cert_pem']
@@ -189,7 +189,7 @@ class safe_mail(object):
 
   def list_peer_email(self):
     s = SafeUser()
-    peer_list = s.get_peer_list()
+    peer_list = s.peer_list
     for peer in peer_list:
       print "\nPeer Contact List: "
       print str(peer).split("#")[0]+": "+ str(s.get_metadata(peer)['email'])
