@@ -8,8 +8,8 @@ from setuptools import setup, find_packages
 setup(
     name = "safe",
     version = "0.2",
-    packages = find_packages(),
-    scripts = ['safe_mail.py'],
+    packages = ['safe'],
+    package_dir={'safe': 'src/safe'},
 
     # Project uses reStructuredText, so ensure that the docutils get
     # installed or upgraded on the target machine
