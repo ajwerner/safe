@@ -14,13 +14,10 @@ Class for X.509 certificate creation and signing.
 Saves certificates and privates keys to keychain in PEM format.
 """
 
-from OpenSSL import crypto, SSL
+from OpenSSL import crypto
 from Crypto.Util import asn1
-from time import gmtime, mktime
 import os
 import struct
-import pprint
-from keychain import KeyChain
 
 class X509Error:
     def __init__(self, value):

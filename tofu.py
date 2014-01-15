@@ -6,12 +6,9 @@ __credits__     = ["Wathsala Vithanage", "Andrew Werner"]
 __license__     = "Apache"
 __version__     = "0.1"
 
-import sys, os, xmpp, time, base64
+import sys, xmpp, base64
 import hashlib
-import getpass
 import threading
-import time
-import random
 from Crypto import Random
 from Crypto.Cipher import AES
 from diffie_hellman import *

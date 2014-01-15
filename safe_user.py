@@ -18,27 +18,22 @@ import os
 import json
 import boto
 import logging
-import copy
 import uuid
 import time
+from os.path import expanduser
 from configuration      import *
-from boto import iam
-from boto import dynamodb
 from datetime import timedelta, datetime
 from boto.dynamodb.exceptions import DynamoDBKeyNotFoundError
-from base64             import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode
+from base64             import b64decode, b64encode, urlsafe_b64encode
 from OpenSSL            import crypto
 from Crypto             import Random
-from Crypto.Cipher      import AES, PKCS1_OAEP
-from Crypto.PublicKey   import RSA
-from Crypto.Hash.SHA256 import SHA256Hash
 from urllib2       import urlopen, HTTPError
 from tofu          import *
 from safe_list     import SafeList
 from safe_device   import SafeDevice
 from safe_peer       import SafePeer
 from keychain      import *
-from X509          import X509, X509Error
+from X509          import X509
 
 #Setup logging...
 logging.basicConfig(format='%(levelname)s:%(message)s')
@@ -81,7 +76,7 @@ class SafeUser(object):
                   'metadata_keys', 'metadata', 'uid']
     PROTECTED_METADATA_KEYS = ['cert_pem', 'name', 'email']
 
-    def __init__(self, conf_dir=".safe_config", credentials_csv_path=None):
+    def __init__(self, conf_dir="/".join(expanduser("~"), ".safe_config"), credentials_csv_path=None):
         conf, dev, dev_kc = get_config(conf_dir, credentials_csv_path=credentials_csv_path)
         self.conf = conf
         self.dev = dev
@@ -165,7 +160,7 @@ class SafeUser(object):
         """
         # Initial remote serialization creation
         self.uid = b64encode(uuid4().bytes)
-        self.peer_list = SafeList("", cls=SafePeer)
+        self._peer_list = SafeList("", cls=SafePeer)
         self.dev_list = SafeList("", cls=SafeDevice)
         self.dev_list.add(self.dev)
         self.old_identities = []
@@ -177,16 +172,7 @@ class SafeUser(object):
         self.serialized.put()
         # rereconcile because we just changed the remote state
         self._reconcile_state()
-        self._sign_and_update_dev_cert()
         return
-
-    def _sign_and_update_dev_cert(self):
-        x509 = X509.load_certificate_from_PEM(self.conf['dev_conf']['cert_pem'])
-        x509.sign_certificate(self.x509.get_certificate()[0], self.x509.get_certificate()[1])
-        self.metadata['cert_pem']
-        self.conf['dev_conf']['cert_pem'] = x509.get_PEM_certificate()[0]
-        self.dev.cert_pem = self.conf['dev_conf']['cert_pem']
-        self.dev_kc.update_keychain(self.dev.cert_pem, None)
 
     def _secure_state(self):
         """ 
@@ -230,11 +216,14 @@ class SafeUser(object):
         if dev_x509.validate_cert(self.cert_pem):
             return True
         self.dev_list.remove(self.dev)
-        dev_x509.sign_certificate(*self.x509.get_certificate())
-        (cert_pem, privkey_pem) = dev_x509.get_PEM_certificate()
-        self.dev_kc.write_keychain(cert_pem, privkey_pem)
-        self.dev.cert_pem = cert_pem
+        cert, privkey = self.x509.get_certificate()
+        dev_x509.sign_certificate(cert, privkey)
+        dev_cert_pem, dev_privkey_pem = dev_x509.get_PEM_certificate()
+        self.dev_kc.write_keychain(dev_cert_pem, dev_privkey_pem)
+        self.dev.cert_pem = dev_cert_pem
+        print self.dev.cert_pem
         self.dev_list.add(self.dev)
+        assert dev_x509.validate_cert(self.cert_pem)
         return False
 
     def _secure_metadata(self):
@@ -254,7 +243,7 @@ class SafeUser(object):
             'cert_pem': AES_encrypt(self.cert_pem, self.state_key),
             'old_identities': AES_encrypt(json.dumps(self.old_identities), self.state_key),
             'state_keys': json.dumps(self.state_keys),
-            'ns_list': AES_encrypt(self.peer_list.serialize(), self.state_key),
+            'ns_list': AES_encrypt(self._peer_list.serialize(), self.state_key),
             'dev_list': AES_encrypt(self.dev_list.serialize(), self.state_key),
             'metadata_keys': json.dumps(self.metadata_keys),
             'metadata': AES_encrypt(json.dumps(self.metadata), self.metadata_key),
@@ -329,9 +318,9 @@ class SafeUser(object):
         # Get the peer ns list
         dec_ns_list = AES_decrypt(self.serialized['ns_list'], self.state_key)
         if hasattr(self, 'ns_list'):
-            self.peer_list.update_from_serialization(dec_ns_list)
+            self._peer_list.update_from_serialization(dec_ns_list)
         else:  
-            self.peer_list = SafeList(dec_ns_list, SafePeer)
+            self._peer_list = SafeList(dec_ns_list, SafePeer)
 
         # Get the device list
         dec_dev_list = AES_decrypt(self.serialized['dev_list'], self.state_key)
@@ -431,7 +420,7 @@ class SafeUser(object):
         tofu_id = raw_input("Enter a connection code (just make sure it's the same on both devices): ")
         connection = tofu(jabber_id, jabber_pw, other_id, tofu_id)
         # read namespace info from the connection...
-        ns = self.get_peer_user_object()
+        ns = self._get_peer_user_object()
         ns.remote_index = b64encode(uuid.uuid4().bytes)
         ns_json = json.dumps(ns, cls=SafePeer.ENCODER)
         connection.send(ns_json)
@@ -445,13 +434,15 @@ class SafeUser(object):
     def _add_peer(self, pns):
         index = b64encode(hashlib.sha256(pns.cert_pem + pns.local_index).digest())
         self.metadata_keys[index] = b64encode(encrypt_with_cert(pns.cert_pem, self.metadata_key))
-        self.peer_list.add(pns)
+        self._peer_list.add(pns)
 
-    def get_dev_list(self):
+    @property
+    def dev_list(self):
         return self.dev_list.get_list()
 
-    def get_peer_list(self):
-        return self.peer_list.get_list()
+    @property
+    def peer_list(self):
+        return self._peer_list.get_list()
 
     def remove_device(self, device):
         if self.dev == device:
@@ -509,7 +500,7 @@ class SafeUser(object):
 
     @transaction
     def _remove_peer(self, peer):
-        self.peer_list.remove(peer)
+        self._peer_list.remove(peer)
         self._secure_metadata()
 
     @transaction
@@ -518,5 +509,5 @@ class SafeUser(object):
             raise Exception("Cannot update %s in metadata, it is a protected key" % key)
         self.metadata[key] = value
 
-    def get_peer_user_object(self):
+    def _get_peer_user_object(self):
         return SafePeer(id=self.id, user_name=self.name, cert_pem=self.cert_pem, ctime=-1, remote_index=None, local_index=None)
