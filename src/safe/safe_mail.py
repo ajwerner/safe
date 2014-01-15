@@ -63,7 +63,6 @@ class safe_mail(object):
               print "ABORT: This recepient is not in you peer list!"
               return
           for peer in peerlist:
-              print peer
               if s.get_metadata(peer)['email'] == receiver:
                   receiver_cert = s.get_metadata(peer)['cert_pem']
               if receiver_cert == None:

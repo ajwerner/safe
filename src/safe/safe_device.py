@@ -80,7 +80,7 @@ class SafeDevice():
 
     def get_X509(self, safe_user, privkey_pem=None):
         return X509(self.dev_name, 
-             crypto.load_privatekey(crypto.FILETYPE_PEM, privkey_pem), 
+             crypto.load_privatekey(crypto.FILETYPE_PEM, privkey_pem) if privkey_pem else None, 
              safe_user.conf['user_conf']['name'], 
              safe_user.conf['user_conf']['country'],
              safe_user.conf['user_conf']['state'],
