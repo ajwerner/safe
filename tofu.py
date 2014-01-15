@@ -115,6 +115,8 @@ class tofu(object):
         else:
             body = base64.b64decode(body)
             key=hashlib.sha256(self.secret_value).digest()
+            print "Please confirm this seceret value out of bound with the other party: "
+            print base64.b64encode(hashlib.sha256(key).digest())[:10]
             iv=body[:AES.block_size]
             cipher = AES.new(key, AES.MODE_CFB, iv)
             msg=cipher.decrypt(body[AES.block_size:])
