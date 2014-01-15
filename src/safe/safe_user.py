@@ -221,7 +221,6 @@ class SafeUser(object):
         dev_cert_pem, dev_privkey_pem = dev_x509.get_PEM_certificate()
         self.dev_kc.write_keychain(dev_cert_pem, dev_privkey_pem)
         self.dev.cert_pem = dev_cert_pem
-        print self.dev.cert_pem
         self._dev_list.add(self.dev)
         assert dev_x509.validate_cert(self.cert_pem)
         return False
